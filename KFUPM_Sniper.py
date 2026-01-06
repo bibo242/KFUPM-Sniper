@@ -22,7 +22,7 @@ def play_sound():
     if IS_WINDOWS:
         try:
             import winsound
-            winsound.Beep(1000, 1000)
+            winsound.MessageBeep(winsound.MB_ICONASTERISK)
         except: pass
     else:
         print('\a'); sys.stdout.flush()
@@ -348,7 +348,7 @@ class SniperApp(ctk.CTk):
         self.after(0, self.update_table_row, crn, data)
         
         if new_seats > prev_seats:
-            self.trigger_alert(f"OPEN: {title} ({new_seats} seats)")
+            self.trigger_alert(f"OPEN: {code}-{data['sec']} ({new_seats} seats)")
 
     def trigger_alert(self, msg):
         self.log_msg_threadsafe(f"🚨 {msg}")
