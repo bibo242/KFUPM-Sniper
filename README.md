@@ -1,12 +1,7 @@
 
-
 <img width="160" height="160" alt="kfupm_sniper_icon" src="https://github.com/user-attachments/assets/ecab7613-095c-4fb7-a274-0e0ce5255ef5" />
 
 # KFUPM Sniper
-
-
-
-
 
 ---
 <h2 align="center">Downloads | التحميل</h2>
@@ -39,11 +34,13 @@ This tool works by communicating directly with the Registrar's API in the backgr
 
 - **Modern GUI:** A clean, user-friendly interface built with CustomTkinter.
 - **Smart Auto-Discovery:** Simply input the CRN, and the tool automatically finds which department the course belongs to.
+- **Course Code Monitoring:** Monitor entire courses (e.g., "ME432") to get alerts for ANY open section or NEW sections.
 - **Real-Time Dashboard:** View live seat counts, instructor names, and course titles in a structured table.
 - **Instant Alerts:**
-  - 🔊 **Sound:** Plays a system beep/alert sound.
+  - 🔊 **Sound:** Plays a system beep/alert sound (toggleable).
   - 🚨 **Visual:** The specific course row turns bright green.
-  - 💻 **Popup:** A window pops up on top of other apps.
+  - 💻 **Popup:** A window pops up on top of other apps (toggleable).
+  - 📱 **Push Notifications:** Get alerts on your phone via ntfy.sh (scan QR code to subscribe).
   - ⚡ **Taskbar Flash:** The app icon flashes orange in the taskbar if minimized (Windows).
 - **Direct Link:** A "Go To Register" button activates immediately when a seat is found, taking you directly to the add/drop page.
 - **Dark/Light Mode:** Toggle between themes to suit your preference.
@@ -64,15 +61,17 @@ This is the recommended method for most users. No installation is required!
     - _(Note: Windows might show a security warning. Click "More info" -> "Run anyway".)_
 
 3.  **Configure.**
-    - **Term Code:** Enter the current semester code (e.g., `202520` for Second Semester 2025).
-    - **Add CRNs:** Type the CRN (Course Reference Number) of the closed section you want and click `+ Add CRN`. You can add as many as you like.
+    - **Term Code:** Enter the semester code (e.g., `251` for First Semester 2025, or `202510`).
+    - **Add CRNs:** Type the CRN (Course Reference Number) of the closed section you want and click `+ Add CRN`.
+    - **Add Courses:** Type the course code (e.g., `ME432`) and click `+ Add Course` to monitor all sections.
+    - **Notifications:** Enable "Push Notify" and click "Show QR" to scan the code with your phone for mobile alerts.
 
 4.  **Start.**
     - Click **"START MONITOR"**.
     - The status bar will show "Auto-Discovery" while it locates your courses, then switch to "Monitoring".
 
 5.  **Wait for the Alert.**
-    - Leave the app running in the background.
+    - **IMPORTANT:** Leave the app running in the background. You can minimize it, but **do not close it**.
     - When a seat opens, the app will beep, flash, and show a popup. Click the **"GO TO REGISTER"** button immediately to secure your spot!
 
 ### System Requirements
@@ -103,17 +102,47 @@ This method is for developers or Mac/Linux users.
     python -m venv venv
     # Activate it (on Windows)
     .\venv\Scripts\activate
+    # Activate it (on Linux/Mac)
+    source venv/bin/activate
     ```
 
 4.  **Install the required packages.**
     ```bash
-    pip install customtkinter requests
+    pip install customtkinter requests qrcode pillow
     ```
 
 5.  **Run the script.**
     ```bash
     python KFUPM_Sniper.py
     ```
+
+---
+
+## How It Works
+
+The application operates in two phases:
+
+1.  **Discovery Phase:**
+    - It authenticates with the Banner9 registration system using a guest session (no credentials required).
+    - It scans all departments to find the specific CRNs or Courses you requested.
+    - It builds a dashboard of the target sections.
+
+2.  **Monitoring Phase:**
+    - It continuously polls the specific departments containing your target courses.
+    - It compares the current seat count with the previous count.
+    - If `current_seats > previous_seats` AND `current_seats > 0`, it triggers an alert.
+    - If a new section appears for a monitored course, it triggers a "New Section" alert.
+
+---
+
+## Contributing
+
+Contributions are welcome!
+1.  Fork the repository.
+2.  Create a feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes.
+4.  Push to the branch.
+5.  Open a Pull Request.
 
 ---
 

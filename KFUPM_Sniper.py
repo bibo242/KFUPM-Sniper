@@ -8,6 +8,10 @@ import sys
 import platform
 import ctypes
 import os
+import random
+import string
+import qrcode
+from PIL import Image
 from datetime import datetime
 from tkinter import messagebox
 
@@ -41,25 +45,45 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
-# ================= BACKEND ENGINE =================
 class KFUPMSniperBackend:
-    BASE_URL = 'https://banner9-registration.kfupm.edu.sa/StudentRegistrationSsb'
-    
     def __init__(self):
-        self.session = None
-        self.term_code = ""
+        self.BASE_URL = "https://banner9-registration.kfupm.edu.sa/StudentRegistrationSsb"
+        self.session = requests.Session()
+        self.term_code = None
         self.running = False
+        self.dashboard_cache = {} # {crn: {code, sec, title, instr, seats, dept}}
+        self.target_depts = set() # Departments to monitor
         self.log_callback = None
-        
-        self.all_subjects = ['ACCT', 'AS', 'AE', 'AECM', 'ARE', 'ARC', 'BIOE', 'BIOL', 'BUS', 'CHE', 'CHEM', 'CRP', 'CP', 'CE', 'CGS', 'CPG', 'COE', 'CSE', 'CEM', 'CIE', 'DSE', 'ECON', 'EE', 'EM', 'ENGL', 'ELD', 'ELI', 'ENVS', 'ESE', 'FIN', 'GEOL', 'GEOP', 'GS', 'HRM', 'ISE', 'ICS', 'ITD', 'IAS', 'LS', 'MGT', 'MIS', 'MKT', 'MBA', 'MSE', 'MATH', 'ME', 'MINE', 'NPM', 'OM', 'PETE', 'PE', 'PHYS', 'SIA', 'SSC', 'SWE', 'STAT', 'SE', 'SCE', 'URO']
-        self.target_depts = set()
-        self.dashboard_cache = {} 
+        self.all_subjects = self._get_all_subjects() # List of all department codes
+
+        # ntfy.sh Topic
+        self.ntfy_topic = f"kfupm_sniper_{''.join(random.choices(string.ascii_lowercase + string.digits, k=6))}"
+
+    def _get_all_subjects(self):
+        # This is a hardcoded list for KFUPM. Can be fetched dynamically if needed.
+        return [
+            "AE", "AR", "BI", "CE", "CHE", "CH", "CI", "COE", "CP", "CS", "DES", "EE", "EN", "ES", "GE", "GL", "GS", "IAM", "IE", "IS", "MA", "ME", "MGT", "MIS", "MSE", "NANO", "OE", "PET", "PH", "PM", "SE", "SYS"
+        ]
 
     def log(self, msg):
-        if self.log_callback: self.log_callback(msg)
+        if self.log_callback:
+            self.log_callback(msg)
+        else:
+            print(msg)
+
+    def convert_term_code(self, term_input):
+        if len(term_input) == 3:
+            current_year = datetime.now().year
+            # KFUPM terms are like 251 (2025-1st sem), 252 (2025-2nd sem), 253 (2025-summer)
+            # Assuming 251 means 202510, 252 means 202520, 253 means 202530
+            year_prefix = str(current_year // 100) # e.g., 20 for 2024
+            full_year = year_prefix + term_input[:2]
+            semester_code = {'1': '10', '2': '20', '3': '30'}.get(term_input[2], '10')
+            return f"{full_year}{semester_code}"
+        return term_input # Assume it's already in full format
 
     def auth(self):
-        self.log("Authenticating...")
+        self.log("Attempting to authenticate...")
         s = requests.Session()
         s.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
@@ -105,6 +129,16 @@ class KFUPMSniperBackend:
             return data.get('data', []) if data.get('success') else []
         except: return "ERROR"
 
+    def send_notification(self, message):
+        try:
+            requests.post(f"https://ntfy.sh/{self.ntfy_topic}", 
+                          data=message.encode(encoding='utf-8'),
+                          headers={"Title": "KFUPM Sniper Alert", "Priority": "high"},
+                          timeout=5)
+            self.log("Push notification sent!")
+        except Exception as e:
+            self.log(f"Push notification error: {e}")
+
 # ================= GUI APP =================
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -113,7 +147,7 @@ class SniperApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("KFUPM Sniper")
-        self.geometry("1100x700")
+        self.geometry("1100x750")
         self.resizable(False, False)
         
         # --- SET WINDOW ICON ---
@@ -129,7 +163,9 @@ class SniperApp(ctk.CTk):
         self.backend.log_callback = self.log_msg_threadsafe
         
         self.crn_entries = []
+        self.course_entries = []
         self.watch_list = []
+        self.watch_courses = []
         self.table_rows = {}
         
         self.setup_ui()
@@ -141,14 +177,14 @@ class SniperApp(ctk.CTk):
         # === SIDEBAR ===
         self.sidebar = ctk.CTkFrame(self, width=250, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(8, weight=1)
+        self.sidebar.grid_rowconfigure(9, weight=1) # Adjusted for new items
 
         # Logo Text Only
         self.logo_label = ctk.CTkLabel(self.sidebar, text="KFUPM SNIPER", font=ctk.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 20))
         
         ctk.CTkLabel(self.sidebar, text="Term Code:").grid(row=1, column=0, padx=20, pady=(10, 0), sticky="w")
-        self.term_entry = ctk.CTkEntry(self.sidebar, placeholder_text="e.g. 202520")
+        self.term_entry = ctk.CTkEntry(self.sidebar, placeholder_text="e.g. 251 or 202510")
         self.term_entry.grid(row=2, column=0, padx=20, pady=(0, 20))
         
         # Buttons
@@ -158,30 +194,52 @@ class SniperApp(ctk.CTk):
         self.link_btn = ctk.CTkButton(self.sidebar, text="GO TO REGISTER ↗", fg_color="gray", state="disabled", command=self.open_portal)
         self.link_btn.grid(row=4, column=0, padx=20, pady=10)
 
+        # Alerts
+        self.sound_var = ctk.BooleanVar(value=True)
+        self.popup_var = ctk.BooleanVar(value=True)
+        self.push_var = ctk.BooleanVar(value=False)
+
+        ctk.CTkSwitch(self.sidebar, text="Sound Alerts", variable=self.sound_var).grid(row=5, column=0, padx=20, pady=10, sticky="w")
+        ctk.CTkSwitch(self.sidebar, text="Popup Alerts", variable=self.popup_var).grid(row=6, column=0, padx=20, pady=10, sticky="w")
+        
+        ctk.CTkSwitch(self.sidebar, text="Push Notify", variable=self.push_var, command=self.toggle_push_ui).grid(row=7, column=0, padx=20, pady=10, sticky="w")
+        
+        self.qr_btn = ctk.CTkButton(self.sidebar, text="Show QR", width=100, fg_color="#8e44ad", command=self.show_qr)
+        # Initially hidden
+        self.qr_btn.grid(row=8, column=0, padx=20, pady=5, sticky="ew")
+        self.qr_btn.grid_remove() # Hide initially
+
         # Mode
         self.mode_menu = ctk.CTkOptionMenu(self.sidebar, values=["Dark", "Light"], command=ctk.set_appearance_mode)
-        self.mode_menu.grid(row=9, column=0, padx=20, pady=20, sticky="s")
+        self.mode_menu.grid(row=10, column=0, padx=20, pady=20, sticky="s")
 
         # === MAIN AREA ===
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        self.main_frame.grid_rowconfigure(3, weight=1)
+        self.main_frame.grid_rowconfigure(4, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
 
         # CRN Inputs
         crn_container = ctk.CTkFrame(self.main_frame)
-        crn_container.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(crn_container, text="Target CRNs", font=("Arial", 16, "bold")).pack(pady=5, anchor="w", padx=10)
-        self.crn_scroll = ctk.CTkScrollableFrame(crn_container, height=70, orientation="horizontal")
-        self.crn_scroll.pack(fill="x", padx=10, pady=5)
-        ctk.CTkButton(crn_container, text="+ Add CRN", width=100, command=self.add_crn_field).pack(pady=5)
-        
-        # Start with one empty field
+        crn_container.grid(row=0, column=0, sticky="ew", pady=(0, 5))
+        ctk.CTkLabel(crn_container, text="Target CRNs", font=("Arial", 14, "bold")).pack(pady=2, anchor="w", padx=10)
+        self.crn_scroll = ctk.CTkScrollableFrame(crn_container, height=60, orientation="horizontal")
+        self.crn_scroll.pack(fill="x", padx=10, pady=2)
+        ctk.CTkButton(crn_container, text="+ Add CRN", width=100, height=24, command=self.add_crn_field).pack(pady=5)
         self.add_crn_field()
+
+        # Course Inputs
+        course_container = ctk.CTkFrame(self.main_frame)
+        course_container.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        ctk.CTkLabel(course_container, text="Target Courses (e.g. ME432)", font=("Arial", 14, "bold")).pack(pady=2, anchor="w", padx=10)
+        self.course_scroll = ctk.CTkScrollableFrame(course_container, height=60, orientation="horizontal")
+        self.course_scroll.pack(fill="x", padx=10, pady=2)
+        ctk.CTkButton(course_container, text="+ Add Course", width=100, height=24, command=self.add_course_field).pack(pady=5)
+        self.add_course_field()
 
         # Status Bar
         status_frame = ctk.CTkFrame(self.main_frame, height=40, fg_color="transparent")
-        status_frame.grid(row=1, column=0, sticky="ew", pady=(0, 5))
+        status_frame.grid(row=2, column=0, sticky="ew", pady=(0, 5))
         self.status_label = ctk.CTkLabel(status_frame, text="Status: Idle", font=("Consolas", 14))
         self.status_label.pack(side="left")
         self.last_scan_label = ctk.CTkLabel(status_frame, text="Last Scan: --:--:--", font=("Consolas", 14), text_color="gray")
@@ -189,7 +247,7 @@ class SniperApp(ctk.CTk):
 
         # Table Header
         header = ctk.CTkFrame(self.main_frame, height=30, fg_color="#34495e")
-        header.grid(row=2, column=0, sticky="ew")
+        header.grid(row=3, column=0, sticky="ew")
         cols = [("CRN", 10), ("COURSE", 15), ("SEC", 10), ("TITLE", 35), ("INSTRUCTOR", 30), ("SEATS", 10)]
         for i, (text, weight) in enumerate(cols):
             header.grid_columnconfigure(i, weight=weight)
@@ -197,12 +255,12 @@ class SniperApp(ctk.CTk):
 
         # Table Body
         self.table_scroll = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
-        self.table_scroll.grid(row=3, column=0, sticky="nsew")
+        self.table_scroll.grid(row=4, column=0, sticky="nsew")
         for i, (_, weight) in enumerate(cols): self.table_scroll.grid_columnconfigure(i, weight=weight)
 
         # Logs
-        self.log_box = ctk.CTkTextbox(self.main_frame, height=120, font=("Consolas", 11))
-        self.log_box.grid(row=4, column=0, sticky="ew", pady=(15, 0))
+        self.log_box = ctk.CTkTextbox(self.main_frame, height=100, font=("Consolas", 11), state="disabled")
+        self.log_box.grid(row=5, column=0, sticky="ew", pady=(15, 0))
 
     # --- UI HELPERS ---
     def add_crn_field(self, value=""):
@@ -217,21 +275,53 @@ class SniperApp(ctk.CTk):
     def remove_crn(self, frame):
         frame.destroy()
         self.crn_entries = [x for x in self.crn_entries if x[0].winfo_exists()]
+        self.clear_table() # Clear table when CRNs change
 
-    def log_msg_threadsafe(self, msg): self.after(0, lambda: self._log(msg))
-    def _log(self, msg):
-        self.log_box.insert("end", f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
-        self.log_box.see("end")
+    def add_course_field(self, value=""):
+        f = ctk.CTkFrame(self.course_scroll, fg_color="transparent")
+        f.pack(side="left", padx=5)
+        e = ctk.CTkEntry(f, width=100, placeholder_text="Course Code", justify="center")
+        if value: e.insert(0, value)
+        e.pack(side="left")
+        ctk.CTkButton(f, text="×", width=25, fg_color="#e74c3c", command=lambda: self.remove_course(f)).pack(side="left", padx=2)
+        self.course_entries.append((f, e))
 
-    def open_portal(self): 
-        webbrowser.open("https://banner9-registration.kfupm.edu.sa/StudentRegistrationSsb/ssb/term/termSelection?mode=registration")
+    def remove_course(self, frame):
+        frame.destroy()
+        self.course_entries = [x for x in self.course_entries if x[0].winfo_exists()]
+        self.clear_table() # Clear table when courses change
 
     def clear_table(self):
-        for _, widgets in self.table_rows.items():
-            for w in widgets.values(): w.destroy()
-        self.table_rows = {}
+        for crn in list(self.table_rows.keys()):
+            for widget in self.table_rows[crn].values():
+                widget.destroy()
+            del self.table_rows[crn]
         self.backend.dashboard_cache = {}
         self.backend.target_depts = set()
+
+    def open_portal(self):
+        webbrowser.open(f"{self.backend.BASE_URL}/ssb/registration/registration")
+
+    def toggle_push_ui(self):
+        if self.push_var.get():
+            self.qr_btn.grid()
+            self.log_msg_threadsafe("Push notifications enabled. Scan QR to subscribe.")
+        else:
+            self.qr_btn.grid_remove()
+
+    def show_qr(self):
+        top = ctk.CTkToplevel(self)
+        top.title("Scan for Notifications")
+        top.geometry("300x350")
+        top.attributes('-topmost', True)
+        
+        url = f"https://ntfy.sh/{self.backend.ntfy_topic}"
+        qr = qrcode.make(url)
+        img = ctk.CTkImage(light_image=qr.get_image(), size=(200, 200))
+        
+        ctk.CTkLabel(top, text="Scan to Subscribe", font=("Arial", 16, "bold")).pack(pady=10)
+        ctk.CTkLabel(top, image=img, text="").pack(pady=10)
+        ctk.CTkLabel(top, text=f"Topic: {self.backend.ntfy_topic}", text_color="gray").pack(pady=5)
 
     def update_table_row(self, crn, data):
         seat_color = "#2ecc71" if data['seats'] > 0 else "#e74c3c"
@@ -250,18 +340,31 @@ class SniperApp(ctk.CTk):
         else:
             self.table_rows[crn]['seats'].configure(text=str(data['seats']), text_color=seat_color)
 
+    def log_msg_threadsafe(self, msg):
+        self.after(0, lambda: self._log(msg))
+
+    def _log(self, msg):
+        self.log_box.configure(state="normal")
+        self.log_box.insert("end", f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+        self.log_box.see("end")
+        self.log_box.configure(state="disabled")
+
     # --- MAIN LOGIC ---
     def toggle_scan(self):
         if not self.backend.running:
             self.watch_list = [e.get().strip() for _, e in self.crn_entries if e.get().strip()]
+            self.watch_courses = [e.get().strip().upper().replace(" ", "") for _, e in self.course_entries if e.get().strip()]
             term = self.term_entry.get().strip()
             
-            if not self.watch_list:
-                self._log("Enter at least one CRN.")
+            if not self.watch_list and not self.watch_courses:
+                self._log("Enter at least one CRN or Course Code.")
                 return
             if not term:
                 self._log("Enter a Term Code (e.g. 202520).")
                 return
+            
+            # Convert term code if short format
+            term = self.backend.convert_term_code(term)
             
             self.clear_table()
             self.backend.term_code = term
@@ -294,13 +397,15 @@ class SniperApp(ctk.CTk):
             
             for sec in res:
                 crn = sec.get('courseReferenceNumber')
-                if crn in self.watch_list:
+                code = f"{sec.get('subject')}{sec.get('courseNumber')}"
+                
+                if crn in self.watch_list or code in self.watch_courses:
                     self.backend.target_depts.add(dept)
                     self.update_cache_and_gui(crn, sec, dept)
-                    self.log_msg_threadsafe(f"Found {crn} in {dept}")
+                    self.log_msg_threadsafe(f"Found {crn} ({code})")
 
         if not self.backend.target_depts:
-            self.log_msg_threadsafe("No CRNs found! Check Term/CRNs.")
+            self.log_msg_threadsafe("No CRNs/Courses found! Check inputs.")
             self.after(0, self.stop_gracefully)
             return
 
@@ -319,7 +424,9 @@ class SniperApp(ctk.CTk):
                 if isinstance(res, list):
                     for sec in res:
                         crn = sec.get('courseReferenceNumber')
-                        if crn in self.watch_list:
+                        code = f"{sec.get('subject')}{sec.get('courseNumber')}"
+                        
+                        if crn in self.watch_list or code in self.watch_courses:
                             self.update_cache_and_gui(crn, sec, dept)
                 time.sleep(0.5)
             
@@ -344,19 +451,29 @@ class SniperApp(ctk.CTk):
             'seats': new_seats,
             'dept': dept
         }
+        
+        is_new_section = crn not in self.backend.dashboard_cache
         self.backend.dashboard_cache[crn] = data
         self.after(0, self.update_table_row, crn, data)
         
-        if new_seats > prev_seats:
+        # Alert Logic
+        status_text = self.status_label.cget("text")
+        
+        if is_new_section and status_text == "Status: Monitoring":
+            self.trigger_alert(f"NEW SECTION: {code}-{data['sec']}")
+        elif new_seats > prev_seats and new_seats > 0:
             self.trigger_alert(f"OPEN: {code}-{data['sec']} ({new_seats} seats)")
 
     def trigger_alert(self, msg):
         self.log_msg_threadsafe(f"🚨 {msg}")
         self.after(0, lambda: self.link_btn.configure(state="normal", fg_color="#2ecc71"))
         
-        play_sound()
-        flash_window(self)
-        messagebox.showinfo("SEAT FOUND!", f"{msg}\n\nGo register immediately!")
+        if self.sound_var.get(): play_sound()
+        if self.popup_var.get(): 
+            flash_window(self)
+            messagebox.showinfo("SEAT FOUND!", f"{msg}\n\nGo register immediately!")
+        if self.push_var.get():
+            threading.Thread(target=self.backend.send_notification, args=(msg,)).start()
 
     def stop_gracefully(self):
         self.backend.running = False
