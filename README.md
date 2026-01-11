@@ -1,5 +1,5 @@
 
-<img width="1095" height="824" alt="image" src="https://github.com/user-attachments/assets/d2e78a5d-2b6e-4291-aca1-7f3446c05d66" />
+<img width="160" height="160" alt="kfupm_sniper_icon" src="https://github.com/user-attachments/assets/ecab7613-095c-4fb7-a274-0e0ce5255ef5" />
 
 
 # KFUPM Sniper
@@ -26,7 +26,8 @@ This tool works by communicating directly with the Registrar's API in the backgr
 
 **No Login Required for Monitoring:** It uses the public guest search features, so you don't need to risk your password or account security for basic monitoring.
 
-<img width="1090" height="713" alt="image" src="https://github.com/user-attachments/assets/4f85f83a-ac58-4456-8ac0-c9ca454402dc" />
+<img width="1095" height="824" alt="image" src="https://github.com/user-attachments/assets/54a029e3-15ad-4a66-a889-a4be2621ef85" />
+
 
 
 ---
