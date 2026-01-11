@@ -384,7 +384,7 @@ class SniperApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("KFUPM Sniper")
-        self.geometry("1100x900")
+        self.geometry("1100x800")
         self.resizable(False, False)
         
         # --- SET WINDOW ICON ---
