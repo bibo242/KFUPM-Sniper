@@ -110,7 +110,7 @@ class KFUPMSniperBackend:
                 data = json.load(f)
                 self.term_code = data.get("term_code")
                 self.target_depts = set(data.get("target_depts", []))
-                self.dashboard_cache = data.get("dashboard_cache", {})
+                #self.dashboard_cache = data.get("dashboard_cache", {})
                 self.saved_watch_list = data.get("watch_list", [])
                 self.saved_watch_courses = data.get("watch_courses", [])
                 if "ntfy_topic" in data: self.ntfy_topic = data["ntfy_topic"]
@@ -557,7 +557,7 @@ class SniperApp(ctk.CTk):
         header_frame = ctk.CTkFrame(course_container, fg_color="transparent")
         header_frame.pack(fill="x", padx=10, pady=2)
         
-        ctk.CTkLabel(header_frame, text="Target All Course Sections (By Course Code)", font=("Arial", 14, "bold")).pack(side="left", anchor="w")
+        ctk.CTkLabel(header_frame, text="Target Course Sections (e.g. ME401 or ME401-01)", font=("Arial", 14, "bold")).pack(side="left", anchor="w")
         
         self.gender_var = ctk.StringVar(value="Male")
         self.gender_selector = ctk.CTkSegmentedButton(
@@ -668,7 +668,7 @@ class SniperApp(ctk.CTk):
         f.pack(side="left", padx=5)
         
         # Only the first field gets a placeholder
-        placeholder = "(e.g. ME432)" if not self.course_entries else ""
+        placeholder = "(e.g. ME401-01)" if not self.course_entries else ""
         e = ctk.CTkEntry(f, width=100, placeholder_text=placeholder, justify="center")
         
         if value: e.insert(0, value)
@@ -688,6 +688,7 @@ class SniperApp(ctk.CTk):
         for f, e in self.course_entries:
             if f == frame:
                 course_to_remove = e.get().strip().upper().replace(" ", "")
+                # If it's in COURSE-SECTION format, we keep it as is for matching
                 break
 
         frame.destroy()
@@ -697,7 +698,8 @@ class SniperApp(ctk.CTk):
             # Find all CRNs matching this course and remove them
             crns_to_delete = []
             for crn, data in self.backend.dashboard_cache.items():
-                if data['code'] == course_to_remove:
+                # Match either the full course code or the COURSE-SECTION format
+                if data['code'] == course_to_remove or f"{data['code']}-{data['sec']}" == course_to_remove:
                     crns_to_delete.append(crn)
             
             for crn in crns_to_delete:
@@ -944,7 +946,9 @@ class SniperApp(ctk.CTk):
                     crn = str(sec.get('courseReferenceNumber'))
                     code = f"{sec.get('subject')}{sec.get('courseNumber')}"
                     
-                    if crn in self.watch_list or code in self.watch_courses:
+                    full_course_sec = f"{code}-{sec.get('sequenceNumber')}"
+                    
+                    if crn in self.watch_list or code in self.watch_courses or full_course_sec in self.watch_courses:
                         if dept not in self.backend.target_depts:
                             self.backend.target_depts.add(dept)
                             self.log_msg_threadsafe(f"Found {crn or code} in {dept}")
@@ -982,7 +986,9 @@ class SniperApp(ctk.CTk):
                         crn = str(sec.get('courseReferenceNumber'))
                         code = f"{sec.get('subject')}{sec.get('courseNumber')}"
                         
-                        if crn in self.watch_list or code in self.watch_courses:
+                        full_course_sec = f"{code}-{sec.get('sequenceNumber')}"
+                        
+                        if crn in self.watch_list or code in self.watch_courses or full_course_sec in self.watch_courses:
                             self.update_cache_and_gui(crn, sec, dept, suppress_new_alerts=first_scan)
                 time.sleep(0.5)
             
@@ -1014,6 +1020,13 @@ class SniperApp(ctk.CTk):
         is_new_section = crn not in self.backend.dashboard_cache
         self.backend.dashboard_cache[crn] = data
         self.after(0, self.update_table_row, crn, data)
+        
+        # If seats are available, always enable the register button
+        if new_seats > 0:
+            self.after(0, lambda: self.link_btn.configure(state="normal", fg_color="#2ecc71"))
+            # If found during discovery, log it immediately
+            if not self.is_monitoring_phase:
+                self.log_msg_threadsafe(f"[!] {code}-{data['sec']} is ALREADY OPEN ({new_seats} seats)")
         
         # Alert Logic
         # status_text = self.status_label.cget("text") # Not thread safe
