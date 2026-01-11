@@ -72,6 +72,10 @@ class KFUPMSniperBackend:
         self.reg_pass = ""
         self.reg_browser = "Chrome"
         self.auto_reg_list = set() # Set of CRNs to auto-register
+        self.is_registering = False # Simple flag to prevent simultaneous sessions
+        
+        # Default notification topic (randomized for each new user)
+        self.ntfy_topic = ''.join(random.choices(string.ascii_lowercase + string.digits, k=12))
         
         self.data_file = os.path.join(os.path.expanduser("~"), ".kfupm_sniper", "sniper_data.json")
         self.load_data()
@@ -83,14 +87,14 @@ class KFUPMSniperBackend:
         data = {
             "term_code": self.term_code,
             "target_depts": list(self.target_depts),
-            "dashboard_cache": self.dashboard_cache,
+            #"dashboard_cache": self.dashboard_cache,
             "watch_list": self.watch_list_snapshot if hasattr(self, 'watch_list_snapshot') else [],
             "watch_courses": self.watch_courses_snapshot if hasattr(self, 'watch_courses_snapshot') else [],
             "ntfy_topic": self.ntfy_topic,
             "reg_user": self.reg_user,
             "reg_pass": self.reg_pass,
             "reg_browser": self.reg_browser,
-            "auto_reg_list": list(self.auto_reg_list)
+            # "auto_reg_list": list(self.auto_reg_list) # Removed: don't cache auto-register state
         }
         try:
             os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
@@ -115,7 +119,7 @@ class KFUPMSniperBackend:
                 self.reg_user = data.get("reg_user", "")
                 self.reg_pass = data.get("reg_pass", "")
                 self.reg_browser = data.get("reg_browser", "Chrome")
-                self.auto_reg_list = set(data.get("auto_reg_list", []))
+                # self.auto_reg_list = set(data.get("auto_reg_list", [])) # Removed: don't load auto-register state
         except Exception as e:
             print(f"Failed to load data: {e}")
 
@@ -223,12 +227,14 @@ class BannerRegister:
         try:
             if self.browser == "Chrome":
                 options = webdriver.ChromeOptions()
-                # options.add_argument("--headless")
+                options.add_argument("--headless=new")
+                options.add_argument("--disable-gpu")
+                options.add_argument("--window-size=1920,1080")
                 service = ChromeService(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
             else:
                 options = webdriver.FirefoxOptions()
-                # options.add_argument("-headless")
+                options.add_argument("-headless")
                 service = FirefoxService(GeckoDriverManager().install())
                 self.driver = webdriver.Firefox(service=service, options=options)
             return True
@@ -517,7 +523,7 @@ class SniperApp(ctk.CTk):
             variable=self.reg_browser_var,
             command=self.snapshot_and_save,
             height=28,
-            width = 200
+            width=200
         )
         self.reg_browser_selector.pack(pady=2, fill="x")
 
@@ -765,10 +771,10 @@ class SniperApp(ctk.CTk):
         if crn not in self.table_rows:
             # --- THE FIX: Create a Frame for the Row ---
             row_wrapper = ctk.CTkFrame(self.table_scroll, fg_color="transparent", height=30)
-            row_wrapper.pack(fill="x", expand=False, pady=1)
+            row_wrapper.grid(row=len(self.table_rows), column=0, sticky="ew", pady=1)
 
-            # Auto Reg Checkbox
-            reg_var = ctk.BooleanVar(value=crn in self.backend.auto_reg_list)
+            # Auto Reg Checkbox (Always unchecked by default per user request)
+            reg_var = ctk.BooleanVar(value=False)
             
             # Checkbox Column with fixed width container
             chk_container = ctk.CTkFrame(row_wrapper, width=self.col_widths[6], height=25, fg_color="transparent")
@@ -790,8 +796,8 @@ class SniperApp(ctk.CTk):
             }
             
             # Grid labels (except checkbox which is already handled)
-            for i in range(6):
-                widgets[list(widgets.keys())[i]].grid(row=0, column=i, padx=2)
+            for i, key in enumerate(['crn', 'code', 'sec', 'title', 'instr', 'seats']):
+                widgets[key].grid(row=0, column=i, padx=2)
                 
             self.table_rows[crn] = widgets
         else:
@@ -880,9 +886,9 @@ class SniperApp(ctk.CTk):
             # Convert term code if short format
             term = self.backend.convert_term_code(term)
             
-            # Clear the visible table and the backend cache (as requested: cache from next run overwrites last run)
+            # Clear the visible table (but keep cache for smart discovery)
             self.clear_table_ui()
-            self.backend.dashboard_cache = {}
+            # self.backend.dashboard_cache = {} # Removed: keep cache for continuity
             
             self.backend.term_code = term
             
@@ -1028,17 +1034,32 @@ class SniperApp(ctk.CTk):
             messagebox.showinfo("SEAT FOUND!", f"{msg}\n\nGo register immediately!")
         if self.push_var.get():
             threading.Thread(target=self.backend.send_notification, args=(msg,)).start()
-            
         # Auto Register Logic
         if crn and crn in self.backend.auto_reg_list:
+            if self.backend.is_registering:
+                self.log_msg_threadsafe(f"[!] Registration in progress. Retrying {crn} in 45 seconds...")
+                threading.Timer(45, self.trigger_alert, args=(msg, crn)).start()
+                return
+                
             self.log_msg_threadsafe(f"[*] Triggering Auto-Registration for {crn}...")
+            threading.Thread(target=self.run_registration_with_flag, args=(crn, self.backend.convert_term_code(self.backend.term_code)), daemon=True).start()
+
+    def run_registration_with_flag(self, crn, term):
+        """Wrapper to run registration while managing the is_registering flag"""
+        try:
+            self.backend.is_registering = True
             reg_bot = BannerRegister(
                 self.backend.reg_user, 
                 self.backend.reg_pass, 
                 self.backend.reg_browser, 
                 self.log_msg_threadsafe
             )
-            threading.Thread(target=reg_bot.run, args=(crn, self.backend.convert_term_code(self.backend.term_code)), daemon=True).start()
+            reg_bot.run(crn, term)
+        except Exception as e:
+            self.log_msg_threadsafe(f"[!] Registration Wrapper Error: {e}")
+        finally:
+            self.backend.is_registering = False
+
 
     def stop_gracefully(self):
         self.log_msg_threadsafe(f"Stopping Monitoring...")
