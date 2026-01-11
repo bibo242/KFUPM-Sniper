@@ -1,0 +1,61 @@
+name: Build Windows Executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# 1. REQUIRED: Give the bot permission to edit Release pages
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_name: KFUPM-Sniper-Windows
+            executable_path: dist/KFUPM-Sniper.exe
+          - os: ubuntu-latest
+            artifact_name: KFUPM-Sniper-Linux
+            executable_path: dist/KFUPM-Sniper
+          - os: macos-latest
+            artifact_name: KFUPM-Sniper-MacOS
+            executable_path: dist/KFUPM-Sniper
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile --noconsole --name "KFUPM-Sniper" KFUPM_Sniper.py
+
+    # This uploads to the 'Actions' tab (Good for debugging)
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: ${{ matrix.executable_path }}
+
+    # 2. NEW STEP: This uploads to the 'Releases' page
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: ${{ matrix.executable_path }}
