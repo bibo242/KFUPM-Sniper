@@ -108,10 +108,7 @@ class KFUPMSniperBackend:
 
     def _get_all_subjects(self):
         # This is a hardcoded list for KFUPM. Can be fetched dynamically if needed.
-        return [
-            "AE", "AR", "BI", "CE", "CHE", "CH", "CI", "COE", "CP", "CS", "DES", "EE", "EN", "ES", "GE", "GL", "GS", "IAM", "IE", "IS", "MA", "ME", "MGT", "MIS", "MSE", "NANO", "OE", "PET", "PH", "PM", "SE", "SYS"
-        ]
-
+        return ['ACCT', 'AS', 'AE', 'AECM', 'ARE', 'ARC', 'BIOE', 'BIOL', 'BUS', 'CHE', 'CHEM', 'CRP', 'CP', 'CE', 'CGS', 'CPG', 'COE', 'CSE', 'CEM', 'CIE', 'DSE', 'ECON', 'EE', 'EM', 'ENGL', 'ELD', 'ELI', 'ENVS', 'ESE', 'FIN', 'GEOL', 'GEOP', 'GS', 'HRM', 'ISE', 'ICS', 'ITD', 'IAS', 'LS', 'MGT', 'MIS', 'MKT', 'MBA', 'MSE', 'MATH', 'ME', 'MINE', 'NPM', 'OM', 'PETE', 'PE', 'PHYS', 'SIA', 'SSC', 'SWE', 'STAT', 'SE', 'SCE', 'RES']
     def log(self, msg):
         if self.log_callback:
             self.log_callback(msg)
@@ -133,31 +130,33 @@ class KFUPMSniperBackend:
         self.log("Attempting to authenticate...")
         s = requests.Session()
         s.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Referer': f'{self.BASE_URL}/ssb/classSearch/classSearch'
         })
         try:
+            # 1. Initialize Search Mode
             r = s.get(f'{self.BASE_URL}/ssb/term/termSelection?mode=search', timeout=10)
+            self.log(f"Auth Initial URL: {r.url}")
             token = None
             patterns = [r'<meta name="synchronizerToken" content="([^"]+)"', r'MyBannerSettings\.csrfToken\s*=\s*["\']([^"\']+)["\']']
             for p in patterns:
                 if (match := re.search(p, r.text)):
                     token = match.group(1)
                     break
+            
             if not token: 
                 self.log("Error: CSRF Token not found.")
                 return False
             
             s.headers.update({'X-Synchronizer-Token': token, 'X-Requested-With': 'XMLHttpRequest'})
-            payload = {'term': self.term_code}
-            resp = s.post(f'{self.BASE_URL}/ssb/term/search?mode=search', data=payload)
             
-            if resp.status_code == 200:
-                self.session = s
-                self.log("Auth Success!")
-                return True
-            self.log(f"Auth failed: Status {resp.status_code}")
-            return False
+            # Set Term for Search
+            payload = {'term': self.term_code}
+            s.post(f'{self.BASE_URL}/ssb/term/search?mode=search', data=payload)
+            
+            self.session = s
+            self.log("Auth Success!")
+            return True
         except Exception as e:
             self.log(f"Connection Error: {e}")
             return False
@@ -242,7 +241,7 @@ class SniperApp(ctk.CTk):
 
         # Restore Table
         for crn, data in self.backend.dashboard_cache.items():
-            self.update_table_row(crn, data)
+            self.update_table_row(crn, data, is_stale=True)  # Mark as stale on startup
 
     def setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
@@ -279,10 +278,16 @@ class SniperApp(ctk.CTk):
         
         ctk.CTkSwitch(self.sidebar, text="Push Notify", variable=self.push_var, command=self.toggle_push_ui).grid(row=7, column=0, padx=20, pady=10, sticky="w")
         
-        self.qr_btn = ctk.CTkButton(self.sidebar, text="Show QR", width=100, fg_color="#8e44ad", command=self.show_qr)
-        # Initially hidden
-        self.qr_btn.grid(row=8, column=0, padx=20, pady=5, sticky="ew")
-        self.qr_btn.grid_remove() # Hide initially
+        # Push Info Frame (QR + Copy Link)
+        self.push_info_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.push_info_frame.grid(row=8, column=0, padx=20, pady=5, sticky="ew")
+        self.push_info_frame.grid_remove() # Hide initially
+
+        self.qr_label = ctk.CTkLabel(self.push_info_frame, text="")
+        self.qr_label.pack(pady=5)
+
+        self.copy_btn = ctk.CTkButton(self.push_info_frame, text="Copy link", width=100, fg_color="#3498db", command=self.copy_link)
+        self.copy_btn.pack(pady=5)
 
         # Mode
         self.mode_menu = ctk.CTkOptionMenu(self.sidebar, values=["Dark", "Light"], command=ctk.set_appearance_mode)
@@ -306,7 +311,23 @@ class SniperApp(ctk.CTk):
         # Course Inputs
         course_container = ctk.CTkFrame(self.main_frame)
         course_container.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(course_container, text="Target Courses (e.g. ME432)", font=("Arial", 14, "bold")).pack(pady=2, anchor="w", padx=10)
+        
+        # Header with gender selector
+        header_frame = ctk.CTkFrame(course_container, fg_color="transparent")
+        header_frame.pack(fill="x", padx=10, pady=2)
+        
+        ctk.CTkLabel(header_frame, text="Target Courses (e.g. ME432)", font=("Arial", 14, "bold")).pack(side="left", anchor="w")
+        
+        self.gender_var = ctk.StringVar(value="Male")
+        self.gender_selector = ctk.CTkSegmentedButton(
+            header_frame, 
+            values=["Male", "Female"],
+            variable=self.gender_var,
+            width=120,
+            height=28
+        )
+        self.gender_selector.pack(side="right", padx=5)
+        
         self.course_scroll = ctk.CTkScrollableFrame(course_container, height=60, orientation="horizontal")
         self.course_scroll.pack(fill="x", padx=10, pady=2)
         ctk.CTkButton(course_container, text="+ Add Course", width=100, height=24, command=self.add_course_field).pack(pady=5)
@@ -428,32 +449,45 @@ class SniperApp(ctk.CTk):
         self.backend.dashboard_cache = {}
         self.backend.target_depts = set()
 
+    def clear_table_ui(self):
+        """Clear only the visible table, keep the cache intact"""
+        for crn in list(self.table_rows.keys()):
+            for widget in self.table_rows[crn].values():
+                widget.destroy()
+            del self.table_rows[crn]
+
     def open_portal(self):
         webbrowser.open(f"{self.backend.BASE_URL}/ssb/registration/registration")
 
     def toggle_push_ui(self):
         if self.push_var.get():
-            self.qr_btn.grid()
-            self.log_msg_threadsafe("Push notifications enabled. Scan QR to subscribe.")
+            self.push_info_frame.grid()
+            
+            # Generate QR Code
+            url = f"https://ntfy.sh/{self.backend.ntfy_topic}"
+            qr = qrcode.make(url)
+            img = ctk.CTkImage(light_image=qr.get_image(), size=(150, 150))
+            self.qr_label.configure(image=img)
+            self.qr_label.image = img # Keep reference
+            
+            self.log_msg_threadsafe("Push notifications enabled. Scan QR or copy link to subscribe.")
         else:
-            self.qr_btn.grid_remove()
+            self.push_info_frame.grid_remove()
 
-    def show_qr(self):
-        top = ctk.CTkToplevel(self)
-        top.title("Scan for Notifications")
-        top.geometry("300x350")
-        top.attributes('-topmost', True)
-        
+    def copy_link(self):
         url = f"https://ntfy.sh/{self.backend.ntfy_topic}"
-        qr = qrcode.make(url)
-        img = ctk.CTkImage(light_image=qr.get_image(), size=(200, 200))
-        
-        ctk.CTkLabel(top, text="Scan to Subscribe", font=("Arial", 16, "bold")).pack(pady=10)
-        ctk.CTkLabel(top, image=img, text="").pack(pady=10)
-        ctk.CTkLabel(top, text=f"Topic: {self.backend.ntfy_topic}", text_color="gray").pack(pady=5)
+        self.clipboard_clear()
+        self.clipboard_append(url)
+        self.update() # Now it stays on the clipboard
+        self.log_msg_threadsafe("Link copied to clipboard!")
 
-    def update_table_row(self, crn, data):
-        seat_color = "#2ecc71" if data['seats'] > 0 else "#e74c3c"
+    def update_table_row(self, crn, data, is_stale=False):
+        # Use gray for stale data (not actively monitoring), green/red for live data
+        if is_stale:
+            seat_color = "#95a5a6"  # Gray for stale data
+        else:
+            seat_color = "#2ecc71" if data['seats'] > 0 else "#e74c3c"
+        
         if crn not in self.table_rows:
             r = len(self.table_rows)
             widgets = {
@@ -502,8 +536,8 @@ class SniperApp(ctk.CTk):
             # Convert term code if short format
             term = self.backend.convert_term_code(term)
             
-            # We do NOT clear table here anymore to preserve cache for smart discovery
-            # self.clear_table() 
+            # Clear the visible table (but keep cache for smart discovery)
+            self.clear_table_ui()
             
             self.backend.term_code = term
             
@@ -529,44 +563,52 @@ class SniperApp(ctk.CTk):
         self.log_msg_threadsafe("Auto-Discovery started...")
         self.after(0, lambda: self.status_label.configure(text="Status: Discovery", text_color="#3498db"))
 
-        # Smart Discovery Check
-        skip_discovery = False
-        if self.backend.target_depts:
-            self.log_msg_threadsafe("Restoring from cache... (Smart Discovery)")
-            skip_discovery = True
+        # 1. Identify departments from course codes to prioritize
+        prioritized_depts = set()
+        for course in self.watch_courses:
+            match = re.match(r'^([A-Z]+)', course)
+            if match: prioritized_depts.add(match.group(1))
+        
+        # 2. Build search order: prioritized first, then the rest
+        remaining_depts = [d for d in self.backend.all_subjects if d not in prioritized_depts]
+        search_order = list(prioritized_depts) + remaining_depts
 
-        if not skip_discovery:
-            # Discovery Phase
-            for dept in self.backend.all_subjects:
-                if not self.backend.running: break
-                res = self.backend.fetch_dept(dept)
-                
-                if res == "EXPIRED":
-                    self.backend.auth()
-                    continue
-                if res == "ERROR": continue
-                
-                if not isinstance(res, list): continue
-                
+        # Discovery Phase
+        self.log_msg_threadsafe(f"Searching {len(search_order)} departments...")
+        for dept in search_order:
+            if not self.backend.running: break
+            
+            # Optimization: If we only have course codes and we've found all their depts, we could stop.
+            # But for CRNs, we must keep searching until found or list exhausted.
+            
+            res = self.backend.fetch_dept(dept)
+            
+            if res == "EXPIRED":
+                self.backend.auth()
+                continue
+            if res == "ERROR": continue
+            
+            if isinstance(res, list):
                 for sec in res:
                     crn = sec.get('courseReferenceNumber')
                     code = f"{sec.get('subject')}{sec.get('courseNumber')}"
                     
                     if crn in self.watch_list or code in self.watch_courses:
-                        self.backend.target_depts.add(dept)
+                        if dept not in self.backend.target_depts:
+                            self.backend.target_depts.add(dept)
+                            self.log_msg_threadsafe(f"Found {crn or code} in {dept}")
                         self.update_cache_and_gui(crn, sec, dept)
-                        self.log_msg_threadsafe(f"Found {crn} ({code})")
 
-            if not self.backend.target_depts:
-                self.log_msg_threadsafe("No CRNs/Courses found! Check inputs.")
-                self.after(0, self.stop_gracefully)
-                return
+        if not self.backend.target_depts:
+            self.log_msg_threadsafe("No CRNs/Courses found! Check inputs.")
+            self.after(0, self.stop_gracefully)
+            return
 
         self.is_monitoring_phase = True
         self.after(0, lambda: self.status_label.configure(text="Status: Monitoring", text_color="#2ecc71"))
 
         # Monitor Phase
-        first_scan = True  # Don't alert on first scan (populating newly added courses)
+        first_scan = True
         while self.backend.running:
             for dept in self.backend.target_depts:
                 if not self.backend.running: break
@@ -582,11 +624,10 @@ class SniperApp(ctk.CTk):
                         code = f"{sec.get('subject')}{sec.get('courseNumber')}"
                         
                         if crn in self.watch_list or code in self.watch_courses:
-                            # Pass first_scan flag to prevent alerts during initial population
                             self.update_cache_and_gui(crn, sec, dept, suppress_new_alerts=first_scan)
                 time.sleep(0.5)
             
-            first_scan = False  # After first complete scan, enable alerts
+            first_scan = False
             self.after(0, lambda: self.last_scan_label.configure(text=f"Last Scan: {datetime.now().strftime('%H:%M:%S')}", text_color="#2ecc71"))
             time.sleep(10)
 
@@ -596,7 +637,9 @@ class SniperApp(ctk.CTk):
         new_seats = sec.get('seatsAvailable', 0)
         prev_seats = self.backend.dashboard_cache.get(crn, {}).get('seats', new_seats)
         
-        instr = sec['faculty'][0]['displayName'] if sec.get('faculty') else "TBA"
+        instr = "TBA"
+        if sec.get('faculty') and len(sec['faculty']) > 0:
+            instr = sec['faculty'][0].get('displayName', 'TBA')
         code = f"{sec.get('subject')}{sec.get('courseNumber')}"
         title = sec.get('courseTitle', 'Unknown')
         
@@ -638,6 +681,10 @@ class SniperApp(ctk.CTk):
         self.start_btn.configure(text="START MONITOR", fg_color="green", state="normal")
         self.status_label.configure(text="Status: Stopped", text_color="gray")
         self.term_entry.configure(state="normal")
+        
+        # Mark all seat numbers as stale (gray)
+        for crn, widgets in self.table_rows.items():
+            widgets['seats'].configure(text_color="#95a5a6")  # Gray for stale data
         
         # Save state on stop
         self.backend.watch_list_snapshot = [e.get().strip() for _, e in self.crn_entries if e.get().strip()]
