@@ -40,7 +40,7 @@ jobs:
 
     - name: Build with PyInstaller
       run: |
-        pyinstaller --onefile --noconsole --name "KFUPM-Sniper" KFUPM_Sniper.py
+        pyinstaller --onefile --noconsole --name "KFUPM-Sniper" KFUPM_Sniper.py --hidden-import='PIL._tkinter_finder'
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
