@@ -668,7 +668,7 @@ class SniperApp(ctk.CTk):
         f.pack(side="left", padx=5)
         
         # Only the first field gets a placeholder
-        placeholder = "(e.g. ME401-01)" if not self.course_entries else ""
+        placeholder = "e.g. ME401-01" if not self.course_entries else ""
         e = ctk.CTkEntry(f, width=100, placeholder_text=placeholder, justify="center")
         
         if value: e.insert(0, value)

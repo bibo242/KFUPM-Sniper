@@ -13,7 +13,7 @@
   <p align="center"><small><em>(Note: Windows might show a "Windows protected your PC" security warning. Click "More info" and then "Run anyway".)</em></small></p>
   <p align="center"><small><em>This happens because the app isn't yet code-signed (a process that verifies the publisher).</em></small></p>
   <p align="center">⭐ <small>If you find this project helpful, please consider starring it on GitHub! Your support is appreciated. ⭐</small></p>
-  <p align="center"><small> View all versions on the <a href="https://github.com/yourusername/KFUPM-Course-Sniper/releases">Releases Page</a>.</small></p>
+  <p align="center"><small> View all versions on the <a href="https://github.com/bibo242/KFUPM-Sniper/releases">Releases Page</a>.</small></p>
 </div>
 
 ---
@@ -23,7 +23,7 @@ The **KFUPM Course Sniper** is a modern desktop application designed to monitor 
 
 This tool works by communicating directly with the Registrar's API in the background. When a seat opens in one of your target courses, the app instantly alerts you with sound, a popup, and a visual indicator, allowing you to register before anyone else.
 
-**No Login Required:** It uses the public guest search features, so you don't need to risk your password or account security.
+**No Login Required for Monitoring:** It uses the public guest search features, so you don't need to risk your password or account security for basic monitoring.
 
 <img width="1090" height="713" alt="image" src="https://github.com/user-attachments/assets/4f85f83a-ac58-4456-8ac0-c9ca454402dc" />
 
@@ -34,13 +34,17 @@ This tool works by communicating directly with the Registrar's API in the backgr
 
 - **Modern GUI:** A clean, user-friendly interface built with CustomTkinter.
 - **Smart Auto-Discovery:** Simply input the CRN, and the tool automatically finds which department the course belongs to.
-- **Course Code Monitoring:** Monitor entire courses (e.g., "ME432") to get alerts for ANY open section or NEW sections.
+- **Course Section Targeting:** Monitor entire courses (e.g., "ME432") or specific sections (e.g., "ME401-01").
+- **Gender Selection:** Filter course sections based on gender (Male/Female).
 - **Real-Time Dashboard:** View live seat counts, instructor names, and course titles in a structured table.
+- **⚡ Auto-Registration (New):** Automatically register for a course as soon as a seat becomes available.
+  - **Conflict Handling:** Automatically drops conflicting courses if a seat is found (Mirror Swap logic).
+  - **Browser Support:** Supports both Chrome and Firefox (Headless mode).
 - **Instant Alerts:**
   - 🔊 **Sound:** Plays a system beep/alert sound (toggleable).
   - 🚨 **Visual:** The specific course row turns bright green.
   - 💻 **Popup:** A window pops up on top of other apps (toggleable).
-  - 📱 **Push Notifications:** Get alerts on your phone via ntfy.sh (scan QR code to subscribe).
+  - 📱 **Push Notifications:** Get alerts on your phone via ntfy.sh. Scan the QR code or copy the link to subscribe.
   - ⚡ **Taskbar Flash:** The app icon flashes orange in the taskbar if minimized (Windows).
 - **Direct Link:** A "Go To Register" button activates immediately when a seat is found, taking you directly to the add/drop page.
 - **Dark/Light Mode:** Toggle between themes to suit your preference.
@@ -53,7 +57,7 @@ This tool works by communicating directly with the Registrar's API in the backgr
 This is the recommended method for most users. No installation is required!
 
 1.  **Download the latest release.**
-    - Go to the [**Releases Page**](https://github.com/yourusername/KFUPM-Course-Sniper/releases).
+    - Go to the [**Releases Page**](https://github.com/bibo242/KFUPM-Sniper/releases).
     - Under the latest version, download the `KFUPM_Sniper.exe` file from the "Assets" section.
 
 2.  **Run the application.**
@@ -63,8 +67,13 @@ This is the recommended method for most users. No installation is required!
 3.  **Configure.**
     - **Term Code:** Enter the semester code (e.g., `251` for First Semester 2025, or `202510`).
     - **Add CRNs:** Type the CRN (Course Reference Number) of the closed section you want and click `+ Add CRN`.
-    - **Add Courses:** Type the course code (e.g., `ME432`) and click `+ Add Course` to monitor all sections.
-    - **Notifications:** Enable "Push Notify" and click "Show QR" to scan the code with your phone for mobile alerts.
+    - **Add Courses:** Type the course code (e.g., `ME432`) or a specific section (e.g., `ME401-01`) and click `+ Add Course`.
+    - **Gender:** Select "Male" or "Female" to filter sections.
+    - **Notifications:** Enable "Phone Notifications" and scan the QR code or copy the link to your phone.
+    - **Auto-Registration (Optional):**
+      - Enter your KFUPM credentials in the "AUTO REGISTER SETTINGS" sidebar.
+      - Select your preferred browser (Chrome/Firefox).
+      - Check the "AUTO REG" box next to the CRN in the dashboard.
 
 4.  **Start.**
     - Click **"START MONITOR"**.
@@ -72,7 +81,7 @@ This is the recommended method for most users. No installation is required!
 
 5.  **Wait for the Alert.**
     - **IMPORTANT:** Leave the app running in the background. You can minimize it, but **do not close it**.
-    - When a seat opens, the app will beep, flash, and show a popup. Click the **"GO TO REGISTER"** button immediately to secure your spot!
+    - When a seat opens, the app will beep, flash, and show a popup. If Auto-Registration is enabled, it will attempt to register you automatically!
 
 ### System Requirements
 - An active internet connection.
@@ -108,7 +117,7 @@ This method is for developers or Mac/Linux users.
 
 4.  **Install the required packages.**
     ```bash
-    pip install customtkinter requests qrcode pillow
+    pip install customtkinter requests qrcode pillow selenium webdriver-manager
     ```
 
 5.  **Run the script.**
@@ -120,7 +129,7 @@ This method is for developers or Mac/Linux users.
 
 ## How It Works
 
-The application operates in two phases:
+The application operates in three phases:
 
 1.  **Discovery Phase:**
     - It authenticates with the Banner9 registration system using a guest session (no credentials required).
@@ -132,6 +141,11 @@ The application operates in two phases:
     - It compares the current seat count with the previous count.
     - If `current_seats > previous_seats` AND `current_seats > 0`, it triggers an alert.
     - If a new section appears for a monitored course, it triggers a "New Section" alert.
+
+3.  **Auto-Registration Phase (Optional):**
+    - If a seat is found and "AUTO REG" is checked, the app launches a headless browser session.
+    - It logs in using your provided credentials and attempts to add the CRN.
+    - If a time conflict is detected, it uses "Mirror Swap" logic to drop the conflicting course and add the new one simultaneously.
 
 ---
 
@@ -148,4 +162,4 @@ Contributions are welcome!
 
 ##  Disclaimer
 
-This tool is provided for educational and personal use only. It is a **monitoring tool**, not a bot that registers for you. The user is solely responsible for complying with all terms of service of King Fahd University of Petroleum & Minerals (KFUPM). Use this tool responsibly; setting polling intervals to be extremely fast may result in your IP being temporarily blocked by the university firewall.
+This tool is provided for educational and personal use only. The **Auto-Registration** feature is experimental and should be used with caution. The user is solely responsible for complying with all terms of service of King Fahd University of Petroleum & Minerals (KFUPM). Use this tool responsibly; setting polling intervals to be extremely fast may result in your IP being temporarily blocked by the university firewall.

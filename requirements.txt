@@ -1,0 +1,7 @@
+customtkinter
+requests
+qrcode
+pillow
+selenium
+webdriver-manager
+pyinstaller
