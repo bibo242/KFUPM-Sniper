@@ -1,5 +1,6 @@
 
-<img width="160" height="160" alt="kfupm_sniper_icon" src="https://github.com/user-attachments/assets/ecab7613-095c-4fb7-a274-0e0ce5255ef5" />
+<img width="1095" height="824" alt="image" src="https://github.com/user-attachments/assets/d2e78a5d-2b6e-4291-aca1-7f3446c05d66" />
+
 
 # KFUPM Sniper
 
