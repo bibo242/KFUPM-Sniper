@@ -344,7 +344,7 @@ class BannerRegister:
 
         # FIND CONFLICT
         conflict_crn = None
-        if "Time conflict" in message:
+        if "conflict" in message:
             match = re.search(r'CRN (\d{5})', message)
             if match:
                 conflict_crn = match.group(1)
@@ -385,8 +385,7 @@ class SniperApp(ctk.CTk):
         super().__init__()
         self.title("KFUPM Sniper")
         self.geometry("1100x800")
-        self.resizable(False, False)
-        
+        self.resizable(True, True)
         # --- SET WINDOW ICON ---
         try:
             # Requires .ico file for Windows taskbar/titlebar
@@ -772,7 +771,7 @@ class SniperApp(ctk.CTk):
         
         if crn not in self.table_rows:
             # --- THE FIX: Create a Frame for the Row ---
-            row_wrapper = ctk.CTkFrame(self.table_scroll, fg_color="transparent", height=30)
+            row_wrapper = ctk.CTkFrame(self.table_scroll, height=30)
             row_wrapper.grid(row=len(self.table_rows), column=0, sticky="ew", pady=1)
 
             # Auto Reg Checkbox (Always unchecked by default per user request)
