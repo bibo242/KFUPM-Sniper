@@ -26,7 +26,8 @@ This tool works by communicating directly with the Registrar's API in the backgr
 
 **No Login Required for Monitoring:** It uses the public guest search features, so you don't need to risk your password or account security for basic monitoring.
 
-<img width="1095" height="824" alt="image" src="https://github.com/user-attachments/assets/54a029e3-15ad-4a66-a889-a4be2621ef85" />
+<img width="1092" height="917" alt="image" src="https://github.com/user-attachments/assets/beb44c77-aad9-448c-817a-c6517e36d163" />
+
 
 
 
