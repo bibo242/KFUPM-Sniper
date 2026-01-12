@@ -22,7 +22,7 @@ jobs:
             upload_path: dist/KFUPM-Sniper
             asset_name: KFUPM-Sniper-Linux
             
-          - os: macos-13
+          - os: macos-15-intel
             upload_path: dist/KFUPM-Sniper-MacOS.zip
             asset_name: KFUPM-Sniper-MacOS.zip
 
