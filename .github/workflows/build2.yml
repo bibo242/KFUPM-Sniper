@@ -51,7 +51,7 @@ jobs:
 
     # ZIP STEP (Mac Only)
     - name: Zip Mac Application
-      if: matrix.os == 'macos-latest'
+      if: matrix.os == 'macos-15-intel'
       run: |
         cd dist
         zip -r KFUPM-Sniper-MacOS.zip KFUPM-Sniper.app
