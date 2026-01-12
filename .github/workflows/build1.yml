@@ -48,8 +48,7 @@ jobs:
     - name: Build with PyInstaller
       run: |
         # --windowed is crucial for Mac to create the .app folder
-        pyinstaller --noconfirm --onefile --windowed --noconsole --name "KFUPM-Sniper" sniper_gui_v6.py
-
+        pyinstaller --onefile --noconsole --windowed --name "KFUPM-Sniper" KFUPM_Sniper.py --hidden-import='PIL._tkinter_finder'
     # SPECIAL STEP: Zip the Mac App
     # This prevents the "File is damaged" confusion by keeping the structure intact
     - name: Zip Mac Application
