@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual run
 
 permissions:
   contents: write
@@ -14,17 +14,14 @@ jobs:
     strategy:
       matrix:
         include:
-          # Windows: Uploads .exe
           - os: windows-latest
             upload_path: dist/KFUPM-Sniper.exe
             asset_name: KFUPM-Sniper-Windows.exe
             
-          # Linux: Uploads binary
           - os: ubuntu-latest
             upload_path: dist/KFUPM-Sniper
             asset_name: KFUPM-Sniper-Linux
             
-          # MacOS: Uploads .zip containing the .app bundle
           - os: macos-latest
             upload_path: dist/KFUPM-Sniper-MacOS.zip
             asset_name: KFUPM-Sniper-MacOS.zip
@@ -47,18 +44,27 @@ jobs:
 
     - name: Build with PyInstaller
       run: |
-        # --windowed is crucial for Mac to create the .app folder
+        # --windowed is crucial for Mac
         pyinstaller --onefile --noconsole --windowed --name "KFUPM-Sniper" KFUPM_Sniper.py --hidden-import='PIL._tkinter_finder'
-    # SPECIAL STEP: Zip the Mac App
-    # This prevents the "File is damaged" confusion by keeping the structure intact
+
+    # ZIP STEP (Mac Only)
     - name: Zip Mac Application
       if: matrix.os == 'macos-latest'
       run: |
         cd dist
         zip -r KFUPM-Sniper-MacOS.zip KFUPM-Sniper.app
 
-    # Upload to Releases Page
-    - name: Release
+    # --- FIX STARTS HERE ---
+    
+    # 1. Upload to Actions Tab (So you can see them when running manually)
+    - name: Upload Artifact to Summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}
+        path: ${{ matrix.upload_path }}
+
+    # 2. Upload to Releases Page (Only runs if you push a Tag like v1.0)
+    - name: Release to GitHub
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
