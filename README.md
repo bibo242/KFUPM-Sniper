@@ -86,12 +86,16 @@ This is the recommended method for most users. No installation is required!
     - **IMPORTANT:** Leave the app running in the background. You can minimize it, but **do not close it**.
     - When a seat opens, the app will beep, flash, and show a popup. If Auto-Registration is enabled, it will attempt to register you automatically!
 
-### System Requirements
-- An active internet connection.
-- Windows 10 or 11 (for the `.exe` and taskbar flashing features).
-- _(Mac/Linux users can run the source code directly)._
+## How to Use the Application on MacOS 
 
----
+1. Download the MacOS version from the releases page
+2. Open **Terminal**.
+3. Type `chmod +x ` (make sure there is a space) and **drag the file** into the terminal window. Press **Enter**.
+4. Type `xattr -cr ` (make sure there is a space) and **drag the file** into the terminal window. Press **Enter**.
+5. Now double-click the file to run it.
+
+
+
 
 ##  How to Run from Source (`.py` file)
 
