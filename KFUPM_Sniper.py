@@ -344,8 +344,13 @@ class BannerRegister:
 
         # FIND CONFLICT
         conflict_crn = None
-        if "conflict" in message:
+        if "Time conflict" in message:
             match = re.search(r'CRN (\d{5})', message)
+            if match:
+                conflict_crn = match.group(1)
+                self.log(f"[+] CONFLICT IDENTIFIED: {conflict_crn}")
+        elif "Duplicate" in message:
+            match = re.search(r'(\d{5})', message)
             if match:
                 conflict_crn = match.group(1)
                 self.log(f"[+] CONFLICT IDENTIFIED: {conflict_crn}")
