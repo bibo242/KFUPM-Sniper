@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build and Release
 
 on:
   push:
@@ -6,7 +6,6 @@ on:
       - 'v*'
   workflow_dispatch:
 
-# 1. REQUIRED: Give the bot permission to edit Release pages
 permissions:
   contents: write
 
@@ -14,17 +13,21 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
         include:
+          # Windows: Uploads .exe
           - os: windows-latest
-            artifact_name: KFUPM-Sniper-Windows
-            executable_path: dist/KFUPM-Sniper.exe
+            upload_path: dist/KFUPM-Sniper.exe
+            asset_name: KFUPM-Sniper-Windows.exe
+            
+          # Linux: Uploads binary
           - os: ubuntu-latest
-            artifact_name: KFUPM-Sniper-Linux
-            executable_path: dist/KFUPM-Sniper
+            upload_path: dist/KFUPM-Sniper
+            asset_name: KFUPM-Sniper-Linux
+            
+          # MacOS: Uploads .zip containing the .app bundle
           - os: macos-latest
-            artifact_name: KFUPM-Sniper-MacOS
-            executable_path: dist/KFUPM-Sniper
+            upload_path: dist/KFUPM-Sniper-MacOS.zip
+            asset_name: KFUPM-Sniper-MacOS.zip
 
     runs-on: ${{ matrix.os }}
 
@@ -44,18 +47,20 @@ jobs:
 
     - name: Build with PyInstaller
       run: |
-        pyinstaller --onefile --noconsole --name "KFUPM-Sniper" KFUPM_Sniper.py
+        # --windowed is crucial for Mac to create the .app folder
+        pyinstaller --noconfirm --onefile --windowed --noconsole --name "KFUPM-Sniper" sniper_gui_v6.py
 
-    # This uploads to the 'Actions' tab (Good for debugging)
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact_name }}
-        path: ${{ matrix.executable_path }}
+    # SPECIAL STEP: Zip the Mac App
+    # This prevents the "File is damaged" confusion by keeping the structure intact
+    - name: Zip Mac Application
+      if: matrix.os == 'macos-latest'
+      run: |
+        cd dist
+        zip -r KFUPM-Sniper-MacOS.zip KFUPM-Sniper.app
 
-    # 2. NEW STEP: This uploads to the 'Releases' page
+    # Upload to Releases Page
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: ${{ matrix.executable_path }}
+        files: ${{ matrix.upload_path }}
