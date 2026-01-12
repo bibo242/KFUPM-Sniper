@@ -124,7 +124,7 @@ This method is for developers or Mac/Linux users.
 
 4.  **Install the required packages.**
     ```bash
-    pip install customtkinter requests qrcode pillow selenium webdriver-manager
+    pip install -r requirements.txt
     ```
 
 5.  **Run the script.**
