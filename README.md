@@ -89,11 +89,8 @@ This is the recommended method for most users. No installation is required!
 ## How to Use the Application on MacOS 
 
 1. Download the MacOS version from the releases page
-2. Open **Terminal**.
-3. Type `chmod +x ` (make sure there is a space) and **drag the file** into the terminal window. Press **Enter**.
-4. Type `xattr -cr ` (make sure there is a space) and **drag the file** into the terminal window. Press **Enter**.
-5. Now double-click the file to run it.
-
+2. Right click on application then Open
+3. Click Open
 
 
 
