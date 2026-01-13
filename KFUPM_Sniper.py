@@ -24,6 +24,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
+from concurrent.futures import ThreadPoolExecutor
 
 # ================= CONFIGURATION =================
 ICON_FILENAME = "icon.ico"  # Window Title/Taskbar Icon
@@ -59,6 +60,7 @@ class KFUPMSniperBackend:
     def __init__(self):
         self.BASE_URL = "https://banner9-registration.kfupm.edu.sa/StudentRegistrationSsb"
         self.session = requests.Session()
+        self.scan_interval = 2.5 # Default safe value
         self.term_code = None
         self.running = False
         self.dashboard_cache = {} # {crn: {code, sec, title, instr, seats, dept}}
@@ -87,10 +89,9 @@ class KFUPMSniperBackend:
     def save_data(self):
         data = {
             "term_code": self.term_code,
-            "target_depts": list(self.target_depts),
-            #"dashboard_cache": self.dashboard_cache,
             "watch_list": self.watch_list_snapshot if hasattr(self, 'watch_list_snapshot') else [],
             "watch_courses": self.watch_courses_snapshot if hasattr(self, 'watch_courses_snapshot') else [],
+            "scan_interval": self.scan_interval, 
             "ntfy_topic": self.ntfy_topic,
             "reg_user": self.reg_user,
             "reg_pass": self.reg_pass,
@@ -110,10 +111,9 @@ class KFUPMSniperBackend:
             with open(self.data_file, 'r') as f:
                 data = json.load(f)
                 self.term_code = data.get("term_code")
-                self.target_depts = set(data.get("target_depts", []))
-                #self.dashboard_cache = data.get("dashboard_cache", {})
                 self.saved_watch_list = data.get("watch_list", [])
                 self.saved_watch_courses = data.get("watch_courses", [])
+                self.scan_interval = data.get("scan_interval", 2.5)
                 if "ntfy_topic" in data: self.ntfy_topic = data["ntfy_topic"]
                 
                 # Auto Reg Settings
@@ -276,6 +276,7 @@ class BannerRegister:
             search.send_keys(term)
             time.sleep(1)
             search.send_keys(Keys.RETURN)
+            time.sleep(3)
             WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, "term-go"))).click()
             WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.ID, "search-go")))
             return True
@@ -390,7 +391,7 @@ class SniperApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("KFUPM Sniper")
-        self.geometry("1100x800")
+        self.geometry("1100x900")
         self.resizable(True, True)
         # --- SET WINDOW ICON ---
         try:
@@ -459,7 +460,7 @@ class SniperApp(ctk.CTk):
         self.logo_label = ctk.CTkLabel(self.sidebar, text="KFUPM SNIPER", font=ctk.CTkFont(size=25, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 20))
         
-        ctk.CTkLabel(self.sidebar, text="Term Code:",font=("Arial", 14, "bold")).grid(row=1, column=0, padx=20, pady=(10, 0), sticky="w")
+        ctk.CTkLabel(self.sidebar, text="Term Code:",font=("Arial", 15, "bold")).grid(row=1, column=0, padx=20, pady=(10, 0), sticky="w")
         
         self.term_var = ctk.StringVar()
         self.term_menu = ctk.CTkOptionMenu(
@@ -470,7 +471,7 @@ class SniperApp(ctk.CTk):
             width=200
         )
         self.term_menu.grid(row=2, column=0, padx=20, pady=(0, 10))
-        
+
         # Buttons
         self.start_btn = ctk.CTkButton(self.sidebar, text="START MONITOR", fg_color="green", command=self.toggle_scan)
         self.start_btn.grid(row=3, column=0, padx=20, pady=10)
@@ -483,10 +484,10 @@ class SniperApp(ctk.CTk):
         self.popup_var = ctk.BooleanVar(value=True)
         self.push_var = ctk.BooleanVar(value=True)
 
-        ctk.CTkSwitch(self.sidebar, text="Sound Alerts", font=("Arial", 14, "bold"), variable=self.sound_var).grid(row=5, column=0, padx=20, pady=10, sticky="w")
-        ctk.CTkSwitch(self.sidebar, text="Popup Alerts", font=("Arial", 14, "bold"), variable=self.popup_var).grid(row=6, column=0, padx=20, pady=10, sticky="w")
+        ctk.CTkSwitch(self.sidebar, text="Sound Alerts", font=("Arial", 15, "bold"), variable=self.sound_var).grid(row=5, column=0, padx=20, pady=10, sticky="w")
+        ctk.CTkSwitch(self.sidebar, text="Popup Alerts", font=("Arial", 15, "bold"), variable=self.popup_var).grid(row=6, column=0, padx=20, pady=10, sticky="w")
         
-        ctk.CTkSwitch(self.sidebar, text="Phone Notifications", font=("Arial", 14, "bold"), variable=self.push_var, command=self.toggle_push_ui).grid(row=7, column=0, padx=20, pady=10, sticky="w")
+        ctk.CTkSwitch(self.sidebar, text="Phone Notifications", font=("Arial", 15, "bold"), variable=self.push_var, command=self.toggle_push_ui).grid(row=7, column=0, padx=20, pady=10, sticky="w")
         
         # Push Info Frame (QR + Copy Link)
         self.push_info_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
@@ -503,12 +504,12 @@ class SniperApp(ctk.CTk):
         self.auto_reg_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.auto_reg_frame.grid(row=10, column=0, padx=20, pady=10, sticky="ew")
         
-        ctk.CTkLabel(self.auto_reg_frame, text="AUTO REGISTER SETTINGS", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(0, 5))
+        ctk.CTkLabel(self.auto_reg_frame, text="AUTO REGISTER SETTINGS", font=ctk.CTkFont(size=15, weight="bold")).pack(pady=(0, 5))
         
         self.reg_settings_container = ctk.CTkFrame(self.auto_reg_frame, fg_color="transparent")
         self.reg_settings_container.pack(fill="x")
             
-        ctk.CTkLabel(self.reg_settings_container, text="Login:", font=("Arial", 14, "bold")).pack(pady=(5, 0), anchor="w")
+        ctk.CTkLabel(self.reg_settings_container, text="Login:", font=("Arial", 15, "bold")).pack(pady=(5, 0), anchor="w")
         
         self.reg_user_entry = ctk.CTkEntry(self.reg_settings_container, placeholder_text="Username", height=28)
         self.reg_user_entry.insert(0, self.backend.reg_user)
@@ -537,7 +538,7 @@ class SniperApp(ctk.CTk):
         self.eye_btn.place(relx=1.0, rely=0.5, anchor="e", x=-5)
         # --- PASSWORD ENTRY END ---
         
-        ctk.CTkLabel(self.reg_settings_container, text="Browser:", font=("Arial", 14, "bold")).pack(pady=(5, 0), anchor="w")
+        ctk.CTkLabel(self.reg_settings_container, text="Browser:", font=("Arial", 15, "bold")).pack(pady=(5, 0), anchor="w")
         self.reg_browser_var = ctk.StringVar(value=self.backend.reg_browser)
         self.reg_browser_selector = ctk.CTkSegmentedButton(
             self.reg_settings_container,
@@ -565,7 +566,7 @@ class SniperApp(ctk.CTk):
         # CRN Inputs
         crn_container = ctk.CTkFrame(self.main_frame)
         crn_container.grid(row=0, column=0, sticky="ew", pady=(0, 5))
-        ctk.CTkLabel(crn_container, text="Target Individual Sections (By CRN)", font=("Arial", 14, "bold")).pack(pady=2, anchor="w", padx=10)
+        ctk.CTkLabel(crn_container, text="Target Individual Sections (By CRN)", font=("Arial", 15, "bold")).pack(pady=2, anchor="w", padx=10)
         self.crn_scroll = ctk.CTkScrollableFrame(crn_container, height=60, orientation="horizontal")
         self.crn_scroll.pack(fill="x", padx=10, pady=2)
         ctk.CTkButton(crn_container, text="+ Add CRN", width=100, height=24, command=self.add_crn_field).pack(pady=5)
@@ -579,7 +580,7 @@ class SniperApp(ctk.CTk):
         header_frame = ctk.CTkFrame(course_container, fg_color="transparent")
         header_frame.pack(fill="x", padx=10, pady=2)
         
-        ctk.CTkLabel(header_frame, text="Target Course Sections (e.g. ME401 or ME401-01)", font=("Arial", 14, "bold")).pack(side="left", anchor="w")
+        ctk.CTkLabel(header_frame, text="Target Course Sections (e.g. ME401 or ME401-01)", font=("Arial", 15, "bold")).pack(side="left", anchor="w")
         
         self.gender_var = ctk.StringVar(value="Male")
         self.gender_selector = ctk.CTkSegmentedButton(
@@ -596,17 +597,39 @@ class SniperApp(ctk.CTk):
         ctk.CTkButton(course_container, text="+ Add Course", width=100, height=24, command=self.add_course_field).pack(pady=5)
         self.add_course_field()
 
-        # Status Bar
+        # === STATUS BAR & SPEED CONTROL ===
         status_frame = ctk.CTkFrame(self.main_frame, height=40, fg_color="transparent")
         status_frame.grid(row=2, column=0, sticky="ew", pady=(0, 5))
-        self.status_label = ctk.CTkLabel(status_frame, text="Status: Idle", font=("Consolas", 14))
+
+        # 1. Status Text (Far Left)
+        self.status_label = ctk.CTkLabel(status_frame, text="Status: Idle", font=("Consolas", 15))
         self.status_label.pack(side="left")
-        self.last_scan_label = ctk.CTkLabel(status_frame, text="Last Scan: --:--:--", font=("Consolas", 14), text_color="gray")
+
+        # 2. Metrics (Far Right)
+        self.delay_label = ctk.CTkLabel(status_frame, text="Cycle: --s", font=("Consolas", 15), text_color="gray")
+        self.delay_label.pack(side="right", padx=10)
+        
+        self.last_scan_label = ctk.CTkLabel(status_frame, text="Last Scan: --:--:--", font=("Consolas", 15), text_color="gray")
         self.last_scan_label.pack(side="right", padx=(10, 0))
 
-        self.delay_label = ctk.CTkLabel(status_frame, text="Delay: --s", font=("Consolas", 14), text_color="gray")
-        self.delay_label.pack(side="right", padx=10)
+        # 3. Speed Slider (Center-Right, next to metrics)
+        # We put it in a small frame to keep the label and slider together
+        slider_frame = ctk.CTkFrame(status_frame, fg_color="transparent")
+        slider_frame.pack(side="right", padx=20)
 
+        self.speed_label_title = ctk.CTkLabel(slider_frame, text=f"Wait: {self.backend.scan_interval}s", font=("Consolas", 15))
+        self.speed_label_title.pack(side="left", padx=(0, 5))
+
+        self.delay_slider = ctk.CTkSlider(
+            slider_frame, 
+            from_=0.0, 
+            to=10.0, 
+            number_of_steps=20, 
+            width=120, # Compact width
+            command=self.update_scan_interval
+        )
+        self.delay_slider.set(self.backend.scan_interval)
+        self.delay_slider.pack(side="left")
         # --- CONFIGURATION ---
         # Fixed widths for columns [CRN, COURSE, SEC, TITLE, INSTRUCTOR, SEATS, AUTO REG]
         self.col_widths = [70, 80, 50, 250, 180, 60, 80]
@@ -794,6 +817,21 @@ class SniperApp(ctk.CTk):
         self.update() # Now it stays on the clipboard
         self.log_msg_threadsafe("Link copied to clipboard!")
 
+    def update_scan_interval(self, value):
+        val = round(value, 1)
+        self.backend.scan_interval = val
+        self.speed_label_title.configure(text=f"Wait: {val}s")
+        
+        # Safety Color Coding
+        if val < 1.0:
+            self.speed_label_title.configure(text_color="#e74c3c") # Red (Danger)
+        elif val < 3.0:
+            self.speed_label_title.configure(text_color="#f1c40f") # Yellow (Aggressive)
+        else:
+            self.speed_label_title.configure(text_color="#2ecc71") # Green (Safe)
+            
+        self.snapshot_and_save()
+
     def update_table_row(self, crn, data, is_stale=False):
         # Use gray for stale data (not actively monitoring), green/red for live data
         if is_stale:
@@ -823,7 +861,7 @@ class SniperApp(ctk.CTk):
                 'sec': ctk.CTkLabel(row_wrapper, text=data['sec'], width=self.col_widths[2], anchor="center"),
                 'title': ctk.CTkLabel(row_wrapper, text=data['title'][:30], width=self.col_widths[3], anchor="w"),
                 'instr': ctk.CTkLabel(row_wrapper, text=data['instr'][:20], width=self.col_widths[4], anchor="w"),
-                'seats': ctk.CTkLabel(row_wrapper, text=str(data['seats']), width=self.col_widths[5], font=("Arial", 13, "bold"), text_color=seat_color, anchor="center"),
+                'seats': ctk.CTkLabel(row_wrapper, text=str(data['seats']), width=self.col_widths[5], font=("Arial", 15, "bold"), text_color=seat_color, anchor="center"),
                 'auto_reg': reg_cb,
                 'wrapper': row_wrapper
             }
@@ -926,6 +964,9 @@ class SniperApp(ctk.CTk):
             self.backend.term_code = term
             self.backend.target_gender = self.gender_var.get()
             
+            # --- LOCK SLIDER ---
+            self.delay_slider.configure(state="disabled")
+
             # Snapshot for saving
             self.backend.watch_list_snapshot = self.watch_list
             self.backend.watch_courses_snapshot = self.watch_courses
@@ -1007,41 +1048,54 @@ class SniperApp(ctk.CTk):
             return
 
         self.is_monitoring_phase = True
-        self.log_msg_threadsafe("Monitoring started...")
+        self.log_msg_threadsafe("Monitoring started (Parallel Mode)...")
         self.after(0, lambda: self.status_label.configure(text="Status: Monitoring", text_color="#2ecc71"))
 
-        # Monitor Phase
-        last_scan_start = None
-        first_scan = True
+        # Monitor Phase (Parallelized)
         while self.backend.running:
             current_scan_start = time.time()
-            if last_scan_start:
-                delay = current_scan_start - last_scan_start
-                self.after(0, lambda d=delay: self.delay_label.configure(text=f"Delay: {d:.1f}s", text_color="#3498db"))
-            last_scan_start = current_scan_start
-
-            for dept in self.backend.target_depts:
-                if not self.backend.running: break
-                res = self.backend.fetch_dept(dept)
-                if res == "EXPIRED":
-                    self.log_msg_threadsafe("Session expired, renewing...")
-                    self.backend.auth()
-                    continue
+            
+            # Use ThreadPoolExecutor to fetch all departments simultaneously
+            # max_workers=10 means checking 10 depts at once
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                # Map the fetch function to the departments
+                # We create a list of futures
+                futures = [executor.submit(self.backend.fetch_dept, dept) for dept in self.backend.target_depts]
                 
-                if isinstance(res, list):
-                    for sec in res:
-                        crn = str(sec.get('courseReferenceNumber'))
-                        code = f"{sec.get('subject')}{sec.get('courseNumber')}"
+                # Iterate as they complete
+                for future, dept in zip(futures, self.backend.target_depts):
+                    if not self.backend.running: break
+                    
+                    try:
+                        res = future.result() # Wait for this specific request to finish
                         
-                        full_course_sec = f"{code}-{sec.get('sequenceNumber')}"
+                        if res == "EXPIRED":
+                            self.log_msg_threadsafe("Session expired, renewing...")
+                            self.backend.auth()
+                            continue
                         
-                        if crn in self.watch_list or code in self.watch_courses or full_course_sec in self.watch_courses:
-                            self.update_cache_and_gui(crn, sec, dept, suppress_new_alerts=first_scan)
-                time.sleep(0.5)
+                        if isinstance(res, list):
+                            for sec in res:
+                                crn = str(sec.get('courseReferenceNumber'))
+                                code = f"{sec.get('subject')}{sec.get('courseNumber')}"
+                                full_course_sec = f"{code}-{sec.get('sequenceNumber')}"
+                                
+                                if crn in self.watch_list or code in self.watch_courses or full_course_sec in self.watch_courses:
+                                    # We need to use 'after' here because we are in a thread
+                                    self.update_cache_and_gui(crn, sec, dept, suppress_new_alerts=first_scan)
+                    except Exception as e:
+                        print(f"Error fetching {dept}: {e}")
+
+            # Calculate delay statistics
+            elapsed = time.time() - current_scan_start
+            self.after(0, lambda d=elapsed: self.delay_label.configure(text=f"Cycle: {d:.2f}s", text_color="#3498db"))
+            self.after(0, lambda: self.last_scan_label.configure(text=f"Last Scan: {datetime.now().strftime('%H:%M:%S')}", text_color="#2ecc71"))
             
             first_scan = False
-            self.after(0, lambda: self.last_scan_label.configure(text=f"Last Scan: {datetime.now().strftime('%H:%M:%S')}", text_color="#2ecc71"))
-            time.sleep(10)
+            
+            # --- DYNAMIC SLEEP ---
+            # sleep for whatever the slider is set to
+            time.sleep(self.backend.scan_interval)
 
         self.after(0, self.stop_gracefully)
 
@@ -1085,24 +1139,39 @@ class SniperApp(ctk.CTk):
 
 
     def trigger_alert(self, msg, crn=None):
+        # ==========================================
+        # 1. PRIORITY: FIRE REGISTRATION IMMEDIATELY
+        # ==========================================
+        # We do this FIRST so the popup (which freezes the UI) doesn't delay the snipe.
+        if crn and crn in self.backend.auto_reg_list:
+            if self.backend.is_registering:
+                self.log_msg_threadsafe(f"[!] Registration busy. Retrying {crn} in 45s...")
+                threading.Timer(45, self.trigger_alert, args=(msg, crn)).start()
+            else:
+                self.log_msg_threadsafe(f"[*] Triggering Auto-Registration for {crn}...")
+                # Start the registration thread immediately
+                threading.Thread(
+                    target=self.run_registration_with_flag, 
+                    args=(crn, self.backend.convert_term_code(self.backend.term_code)), 
+                    daemon=True
+                ).start()
+
+        # ==========================================
+        # 2. VISUALS & ALERTS
+        # ==========================================
         self.log_msg_threadsafe(f"🚨 {msg}")
         self.after(0, lambda: self.link_btn.configure(state="normal", fg_color="#2ecc71"))
         
         if self.sound_var.get(): play_sound()
-        if self.popup_var.get(): 
-            flash_window(self)
-            messagebox.showinfo("SEAT FOUND!", f"{msg}\n\nGo register immediately!")
         if self.push_var.get():
             threading.Thread(target=self.backend.send_notification, args=(msg,)).start()
-        # Auto Register Logic
-        if crn and crn in self.backend.auto_reg_list:
-            if self.backend.is_registering:
-                self.log_msg_threadsafe(f"[!] Registration in progress. Retrying {crn} in 45 seconds...")
-                threading.Timer(45, self.trigger_alert, args=(msg, crn)).start()
-                return
-                
-            self.log_msg_threadsafe(f"[*] Triggering Auto-Registration for {crn}...")
-            threading.Thread(target=self.run_registration_with_flag, args=(crn, self.backend.convert_term_code(self.backend.term_code)), daemon=True).start()
+
+        # 3. POPUP (BLOCKING CALL)
+        # Note: This pauses the GUI updates, but the Registration Thread (started above)
+        # will keep running in the background successfully!
+        if self.popup_var.get(): 
+            flash_window(self)
+            messagebox.showinfo("SEAT FOUND!", f"{msg}\n\nCheck logs for registration status!")
 
     def run_registration_with_flag(self, crn, term):
         """Wrapper to run registration while managing the is_registering flag"""
@@ -1128,11 +1197,15 @@ class SniperApp(ctk.CTk):
         self.start_btn.configure(text="START MONITOR", fg_color="green", state="normal")
         self.status_label.configure(text="Status: Stopped", text_color="gray")
         self.term_menu.configure(state="normal")
-        self.delay_label.configure(text="Delay: --s", text_color="gray")
+        #self.delay_label.configure(text="Delay: --s", text_color="gray")
         
         # Mark all seat numbers as stale (gray)
         for crn, widgets in self.table_rows.items():
             widgets['seats'].configure(text_color="#95a5a6")  # Gray for stale data
+
+        # --- UNLOCK SLIDER ---
+        self.delay_slider.configure(state="normal")
+        # ---------------------
         
         # Save state on stop
         self.backend.watch_list_snapshot = [e.get().strip() for _, e in self.crn_entries if e.get().strip()]
