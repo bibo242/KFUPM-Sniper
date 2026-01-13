@@ -414,8 +414,8 @@ class SniperApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_ui()
         self.restore_ui_state()
-        self.log_msg_threadsafe("Welcome to KFUPM SNIPER! Make sure this application STAYS ON for the monitoring to continue. You may minimize it.")
-        self.log_msg_threadsafe("Caution: Auto registration handles time conflicts automatically. Do NOT auto register a course if you are not prepared to drop conflicting courses.")
+        self.log_msg_threadsafe("Welcome to KFUPM SNIPER! Make sure this application STAYS ON for the monitoring to continue. You may minimize it. Some devices shut down automatically after a period of inactivity, disable that setting.")
+        self.log_msg_threadsafe("Caution: Auto registration handles time conflicts and duplicate course conflicts automatically. Do NOT auto register a course if you are not prepared to drop conflicting courses.")
         self.log_msg_threadsafe("For Bug complaints, suggestions, or feature requests, please open an issue on GitHub: https://github.com/bibo242/KFUPM-Sniper/issues")
 
     def restore_ui_state(self):
@@ -519,6 +519,23 @@ class SniperApp(ctk.CTk):
         self.reg_pass_entry.insert(0, self.backend.reg_pass)
         self.reg_pass_entry.pack(pady=2, fill="x")
         self.reg_pass_entry.bind("<KeyRelease>", self.snapshot_and_save)
+
+        # Create the Eye Button as a child of the Entry widget
+        self.eye_btn = ctk.CTkButton(
+            self.reg_pass_entry, 
+            text="👁", 
+            width=25, 
+            height=20, 
+            fg_color="transparent", 
+            hover_color="#333333", # Dark gray hover to match theme
+            text_color="#A0A0A0", 
+            font=("Arial", 16),
+            command=self.toggle_password_visibility
+        )
+        
+        # Place it on the far right inside the entry
+        self.eye_btn.place(relx=1.0, rely=0.5, anchor="e", x=-5)
+        # --- PASSWORD ENTRY END ---
         
         ctk.CTkLabel(self.reg_settings_container, text="Browser:", font=("Arial", 14, "bold")).pack(pady=(5, 0), anchor="w")
         self.reg_browser_var = ctk.StringVar(value=self.backend.reg_browser)
@@ -714,6 +731,15 @@ class SniperApp(ctk.CTk):
                     del self.table_rows[crn]
         
         self.snapshot_and_save()
+
+    def toggle_password_visibility(self):
+        current_show = self.reg_pass_entry.cget("show")
+        if current_show == "*":
+            self.reg_pass_entry.configure(show="")
+            self.eye_btn.configure(text="Ø") # Symbol for "Hidden/Close"
+        else:
+            self.reg_pass_entry.configure(show="*")
+            self.eye_btn.configure(text="👁") # Symbol for "Show/Open"
 
     def clear_table(self):
         for crn in list(self.table_rows.keys()):
