@@ -65,6 +65,7 @@ class KFUPMSniperBackend:
         self.target_depts = set() # Departments to monitor
         self.log_callback = None
         self.all_subjects = self._get_all_subjects() # List of all department codes
+        self.target_gender = "Male" # Default
 
         # Auto-Register Settings
         self.auto_reg_enabled = False
@@ -897,6 +898,7 @@ class SniperApp(ctk.CTk):
             # self.backend.dashboard_cache = {} # Removed: keep cache for continuity
             
             self.backend.term_code = term
+            self.backend.target_gender = self.gender_var.get()
             
             # Snapshot for saving
             self.backend.watch_list_snapshot = self.watch_list
@@ -947,6 +949,21 @@ class SniperApp(ctk.CTk):
             
             if isinstance(res, list):
                 for sec in res:
+                    # --- START GENDER FILTER FIX ---
+                    campus = sec.get('campusDescription', '').lower()
+                    
+                    # USE self.backend.target_gender HERE
+                    target = self.backend.target_gender 
+
+                    # If target is Male, skip if campus mentions 'female'
+                    if target == "Male" and "female" in campus:
+                        continue
+                        
+                    # If target is Female, skip if campus does NOT mention 'female'
+                    if target == "Female" and "female" not in campus:
+                        continue
+                    # --- END GENDER FILTER FIX ---
+
                     crn = str(sec.get('courseReferenceNumber'))
                     code = f"{sec.get('subject')}{sec.get('courseNumber')}"
                     
