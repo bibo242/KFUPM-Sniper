@@ -5,3 +5,4 @@ pillow
 selenium
 webdriver-manager
 pyinstaller
+keyring
