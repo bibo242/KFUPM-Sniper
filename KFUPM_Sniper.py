@@ -1299,20 +1299,21 @@ class SniperApp(ctk.CTk):
         if new_seats > 0:
             self.after(0, lambda: self.link_btn.configure(state="normal", fg_color="#2ecc71"))
             
-        if is_new_section and self.is_monitoring_phase and not suppress_new_alerts:
-            self.backend.debug_log(f"update_cache_and_gui(crn={crn}) -> Triggering NEW SECTION logic")
-            self.trigger_alert(f"NEW SECTION: {code}-{data['sec']}", crn=crn)
+        if is_new_section and self.is_monitoring_phase:
+            if new_seats > 0:
+                self.backend.debug_log(f"update_cache_and_gui(crn={crn}) -> Triggering NEW SECTION logic (skip_reg={suppress_new_alerts})")
+                self.trigger_alert(f"NEW SECTION: {code}-{data['sec']}", crn=crn, skip_auto_reg=suppress_new_alerts)
         elif new_seats > prev_seats and new_seats > 0:
-            self.backend.debug_log(f"update_cache_and_gui(crn={crn}) -> Triggering SEAT OPEN logic! (Diff: {new_seats} > {prev_seats})")
-            self.trigger_alert(f"OPEN: {code}-{data['sec']} ({new_seats} seats)", crn=crn)
+            self.backend.debug_log(f"update_cache_and_gui(crn={crn}) -> Triggering SEAT OPEN logic! (Diff: {new_seats} > {prev_seats}, skip_reg={suppress_new_alerts})")
+            self.trigger_alert(f"OPEN: {code}-{data['sec']} ({new_seats} seats)", crn=crn, skip_auto_reg=suppress_new_alerts)
         else:
             if new_seats == 0 and prev_seats > 0:
                 self.backend.debug_log(f"update_cache_and_gui(crn={crn}) -> Seat was TAKEN. Dropped from {prev_seats} to 0.")
             elif new_seats == prev_seats:
                 pass
 
-    def trigger_alert(self, msg, crn=None):
-        if crn and crn in self.backend.auto_reg_list:
+    def trigger_alert(self, msg, crn=None, skip_auto_reg=False):
+        if crn and crn in self.backend.auto_reg_list and not skip_auto_reg:
             if self.backend.is_registering:
                 self.log_msg_threadsafe(f"[!] Registration busy. Retrying {crn} in 45s...")
                 threading.Timer(45, self.trigger_alert, args=(msg, crn)).start()
