@@ -31,7 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # ================= CONFIGURATION =================
 ICON_FILENAME = "icon.ico"  # Window Title/Taskbar Icon
-DEBUG_MODE = False          # Set to True to enable verbose debug logging to terminal
+DEBUG_MODE = False         # Set to True to enable verbose debug logging to terminal
 VERSION = "2.5.0"           # Current app version — bump this + version.txt on every release
 YOUTUBE_GUIDE_URL = "https://www.youtube.com/watch?v=6L_nF6Kc2Uw"  # Replace with your actual video link
 
@@ -137,7 +137,8 @@ class KFUPMSniperBackend:
         try:
             with open(self.data_file, 'r') as f:
                 data = json.load(f)
-                self.term_code = data.get("term_code")
+                raw_term = data.get("term_code")
+                self.term_code = self.convert_term_code(raw_term) if raw_term else None
                 self.saved_watch_list = data.get("watch_list", [])
                 self.scan_interval = data.get("scan_interval", 2.5)
                 self.debug_mode = DEBUG_MODE  # Always use the constant, not saved state
@@ -262,22 +263,38 @@ class KFUPMSniperBackend:
             return False
 
 
+    def reset_form(self):
+        try: 
+            self.debug_log("reset_form() calling /ssb/classSearch/resetDataForm...")
+            self.session.post(f'{self.BASE_URL}/ssb/classSearch/resetDataForm', timeout=5)
+        except Exception as e:
+            self.debug_log(f"reset_form() failed: {e}")
 
     def fetch_dept(self, dept):
         try:
+            # Clear previous search state and re-bind term (needed for some Banner 9 versions)
+            self.reset_form()
+            self.session.post(f'{self.BASE_URL}/ssb/term/search?mode=search', data={'term': self.term_code}, timeout=5)
+
             params = {
                 'txt_subject': dept, 
                 'txt_term': self.term_code, 
                 'pageMaxSize': '500',
-                '_': str(int(time.time() * 1000)) # Random cache-buster for edge proxies
+                '_': str(int(time.time() * 1000))
             }
-            self.debug_log(f"fetch_dept('{dept}') making GET request /searchResults...")
+            self.debug_log(f"fetch_dept('{dept}') -> URL: {self.BASE_URL}/ssb/searchResults/searchResults")
+            self.debug_log(f"fetch_dept('{dept}') -> Params: {params}")
+            
             r = self.session.get(f'{self.BASE_URL}/ssb/searchResults/searchResults', params=params, timeout=8)
-            self.debug_log(f"fetch_dept('{dept}') -> status_code: {r.status_code}")
+            
+            self.debug_log(f"fetch_dept('{dept}') -> Status: {r.status_code}")
+            self.debug_log(f"fetch_dept('{dept}') -> Response Header: {r.headers.get('Content-Type')}")
+            self.debug_log(f"fetch_dept('{dept}') -> Raw Body (First 200 chars): {r.text[:200]}")
+            
             if r.status_code != 200: return "EXPIRED"
             data = r.json()
             if not data.get('success'):
-                self.debug_log(f"fetch_dept('{dept}') -> success=False. Tomcat Context Dropped? Response: {data}")
+                self.debug_log(f"fetch_dept('{dept}') -> success=False.tomcat context issue?")
             else:
                 self.debug_log(f"fetch_dept('{dept}') -> success=True. Returned {len(data.get('data') or [])} sections.")
             return (data.get('data') or []) if data.get('success') else []
@@ -1022,7 +1039,9 @@ class SniperApp(ctk.CTk):
     def snapshot_and_save(self, event=None):
         # Capture current UI state
         self.backend.watch_list_snapshot = [e.get().strip().upper().replace(" ", "") for _, e in self.crn_entries if e.get().strip()]
-        self.backend.term_code = self.term_var.get()
+        
+        raw_term = self.term_var.get()
+        self.backend.term_code = self.backend.convert_term_code(raw_term)
         
         # Auto Reg State
         self.backend.reg_user = self.reg_user_entry.get().strip()
