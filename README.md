@@ -2,7 +2,7 @@
 <img width="160" height="160" alt="kfupm_sniper_icon" src="https://github.com/user-attachments/assets/ecab7613-095c-4fb7-a274-0e0ce5255ef5" />
 
 
-# KFUPM Sniper
+# KFUPM Sniper (WIP | غير جاهز)
 
 ---
 <h2 align="center">Downloads | التحميل</h2>
@@ -37,7 +37,7 @@ This tool works by communicating directly with the Registrar's API in the backgr
 
 - **Modern GUI:** A clean, user-friendly interface built with CustomTkinter.
 - **Smart Auto-Discovery:** Simply input the CRN, and the tool automatically finds which department the course belongs to.
-- **Course Section Targeting:** Monitor entire courses (e.g., "ME432") or specific sections (e.g., "ME401-01").
+- **Course Section Targeting:**Monitor entire courses (e.g., "ME432") or specific sections (e.g., "ME401-01").
 - **Gender Selection:** Filter course sections based on gender (Male/Female).
 - **Real-Time Dashboard:** View live seat counts, instructor names, and course titles in a structured table.
 - **⚡ Auto-Registration (New):** Automatically register for a course as soon as a seat becomes available.
