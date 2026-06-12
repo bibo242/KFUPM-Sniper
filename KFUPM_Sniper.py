@@ -28,6 +28,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 from concurrent.futures import ThreadPoolExecutor
 
 # ================= CONFIGURATION =================
@@ -348,32 +349,32 @@ class BannerRegister:
         """Auto-detect Chrome, Brave, or Edge binary on the system."""
         candidates = [
             # Chrome
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            (r"C:\Program Files\Google\Chrome\Application\chrome.exe", ChromeType.GOOGLE),
+            (r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe", ChromeType.GOOGLE),
             # Brave
-            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
-            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+            (r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe", ChromeType.BRAVE),
+            (r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe", ChromeType.BRAVE),
             # Edge
-            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            (r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", ChromeType.MSEDGE),
+            (r"C:\Program Files\Microsoft\Edge\Application\msedge.exe", ChromeType.MSEDGE),
             # Linux
-            "/usr/bin/google-chrome",
-            "/usr/bin/google-chrome-stable",
-            "/usr/bin/brave-browser",
-            "/usr/bin/brave-browser-stable",
-            "/usr/bin/chromium-browser",
-            "/usr/bin/chromium",
-            "/usr/bin/microsoft-edge",
-            "/usr/bin/microsoft-edge-stable",
+            ("/usr/bin/google-chrome", ChromeType.GOOGLE),
+            ("/usr/bin/google-chrome-stable", ChromeType.GOOGLE),
+            ("/usr/bin/brave-browser", ChromeType.BRAVE),
+            ("/usr/bin/brave-browser-stable", ChromeType.BRAVE),
+            ("/usr/bin/chromium-browser", ChromeType.GOOGLE),
+            ("/usr/bin/chromium", ChromeType.GOOGLE),
+            ("/usr/bin/microsoft-edge", ChromeType.MSEDGE),
+            ("/usr/bin/microsoft-edge-stable", ChromeType.MSEDGE),
             # macOS
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", ChromeType.GOOGLE),
+            ("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", ChromeType.BRAVE),
+            ("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", ChromeType.MSEDGE),
         ]
-        for path in candidates:
+        for path, chrome_type in candidates:
             if os.path.exists(path):
-                return path
-        return None
+                return path, chrome_type
+        return None, None
 
     def setup_driver(self):
         try:
@@ -384,13 +385,13 @@ class BannerRegister:
                 options.add_argument("--window-size=1920,1080")
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
-                binary = self._find_chromium_binary()
+                binary, chrome_type = self._find_chromium_binary()
                 if binary:
                     options.binary_location = binary
                 else:
                     self.log("No Chrome/Brave/Edge browser found. Install one or switch to Firefox.")
                     return False
-                service = ChromeService(ChromeDriverManager().install())
+                service = ChromeService(ChromeDriverManager(chrome_type=chrome_type).install())
                 self.driver = webdriver.Chrome(service=service, options=options)
             else:
                 options = webdriver.FirefoxOptions()
