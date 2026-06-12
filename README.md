@@ -2,8 +2,8 @@
 <img width="160" height="160" alt="kfupm_sniper_icon" src="https://github.com/user-attachments/assets/ecab7613-095c-4fb7-a274-0e0ce5255ef5" />
 
 
-# KFUPM Sniper (WIP | غير جاهز)
-
+# KFUPM Sniper 
+خاصية التسجيل التلقائي تجريبية - انا جربتها واشتغلت معي (كان فيها بعض المشاكل وصلحتها)، لكن يمكن ما تشتغل معك، ما تحط أمالك 100% فيها.
 ---
 <h2 align="center">Downloads | التحميل</h2>
 
