@@ -344,13 +344,52 @@ class BannerRegister:
         self.token = None
         self.headers = {}
 
+    def _find_chromium_binary(self):
+        """Auto-detect Chrome, Brave, or Edge binary on the system."""
+        candidates = [
+            # Chrome
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            # Brave
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+            # Edge
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            # Linux
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/brave-browser",
+            "/usr/bin/brave-browser-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/usr/bin/microsoft-edge",
+            "/usr/bin/microsoft-edge-stable",
+            # macOS
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        return None
+
     def setup_driver(self):
         try:
-            if self.browser == "Chrome":
+            if self.browser in ("Chrome", "Brave"):
                 options = webdriver.ChromeOptions()
                 options.add_argument("--headless=new")
                 options.add_argument("--disable-gpu")
                 options.add_argument("--window-size=1920,1080")
+                options.add_argument("--no-sandbox")
+                options.add_argument("--disable-dev-shm-usage")
+                binary = self._find_chromium_binary()
+                if binary:
+                    options.binary_location = binary
+                else:
+                    self.log("No Chrome/Brave/Edge browser found. Install one or switch to Firefox.")
+                    return False
                 service = ChromeService(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
             else:
@@ -759,7 +798,7 @@ class SniperApp(ctk.CTk):
         self.reg_browser_var = ctk.StringVar(value=self.backend.reg_browser)
         self.reg_browser_selector = ctk.CTkSegmentedButton(
             self.reg_settings_container,
-            values=["Chrome", "Firefox"],
+            values=["Chrome", "Brave", "Firefox"],
             variable=self.reg_browser_var,
             command=self.snapshot_and_save,
             height=28,
