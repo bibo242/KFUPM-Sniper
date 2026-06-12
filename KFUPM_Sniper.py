@@ -376,7 +376,23 @@ class BannerRegister:
                 return path, chrome_type
         return None, None
 
+    def _dump_chromedriver_log(self, log_path):
+        """Read chromedriver verbose log and dump it to the app log for debugging."""
+        try:
+            if os.path.exists(log_path):
+                with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+                    lines = f.readlines()
+                last_50 = lines[-50:] if len(lines) > 50 else lines
+                self.log("[ChromeDriver Log (last 50 lines)]:")
+                for line in last_50:
+                    self.log(line.rstrip())
+            else:
+                self.log(f"[ChromeDriver Log]: File not found at {log_path}")
+        except Exception as e:
+            self.log(f"[ChromeDriver Log]: Failed to read log: {e}")
+
     def setup_driver(self):
+        chromedriver_log_path = os.path.join(os.path.expanduser("~"), ".kfupm_sniper", "chromedriver.log")
         try:
             if self.browser == "Chrome":
                 options = webdriver.ChromeOptions()
@@ -385,15 +401,18 @@ class BannerRegister:
                 options.add_argument("--window-size=1920,1080")
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
-                options.add_argument("--enable-logging")
-                options.add_argument("--v=1")
                 binary, chrome_type = self._find_chromium_binary()
                 if binary:
                     options.binary_location = binary
+                    self.log(f"[*] Using browser: {binary}")
                 else:
                     self.log("No Chrome/Brave/Edge browser found. Install one or switch to Firefox.")
                     return False
-                service = ChromeService(ChromeDriverManager(chrome_type=chrome_type).install())
+                service = ChromeService(
+                    ChromeDriverManager(chrome_type=chrome_type).install(),
+                    service_args=['--verbose'],
+                    log_output=chromedriver_log_path
+                )
                 self.driver = webdriver.Chrome(service=service, options=options)
             else:
                 options = webdriver.FirefoxOptions()
@@ -403,6 +422,7 @@ class BannerRegister:
             return True
         except Exception as e:
             self.log(f"Driver Setup Error: {e}")
+            self._dump_chromedriver_log(chromedriver_log_path)
             return False
 
     def run(self, target_crn, term):
