@@ -382,9 +382,8 @@ class BannerRegister:
             if os.path.exists(log_path):
                 with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
                     lines = f.readlines()
-                last_50 = lines[-50:] if len(lines) > 50 else lines
-                self.log("[ChromeDriver Log (last 50 lines)]:")
-                for line in last_50:
+                self.log(f"[ChromeDriver Log]: Full log ({len(lines)} lines):")
+                for line in lines:
                     self.log(line.rstrip())
             else:
                 self.log(f"[ChromeDriver Log]: File not found at {log_path}")
