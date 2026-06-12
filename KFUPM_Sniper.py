@@ -21,6 +21,7 @@ import tkinter as tk
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.edge.service import Service as EdgeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -28,6 +29,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from webdriver_manager.core.os_manager import ChromeType
 from concurrent.futures import ThreadPoolExecutor
 
@@ -346,34 +348,36 @@ class BannerRegister:
         self.headers = {}
 
     def _find_chromium_binary(self):
-        """Auto-detect Chrome, Brave, or Edge binary on the system."""
+        """Auto-detect Chrome, Brave, or Edge binary on the system.
+        Returns (path, family) where family is 'chrome', 'brave', or 'edge'.
+        """
         candidates = [
             # Chrome
-            (r"C:\Program Files\Google\Chrome\Application\chrome.exe", ChromeType.GOOGLE),
-            (r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe", ChromeType.GOOGLE),
+            (r"C:\Program Files\Google\Chrome\Application\chrome.exe", "chrome"),
+            (r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe", "chrome"),
             # Brave
-            (r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe", ChromeType.BRAVE),
-            (r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe", ChromeType.BRAVE),
+            (r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe", "brave"),
+            (r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe", "brave"),
             # Edge
-            (r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", ChromeType.MSEDGE),
-            (r"C:\Program Files\Microsoft\Edge\Application\msedge.exe", ChromeType.MSEDGE),
+            (r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "edge"),
+            (r"C:\Program Files\Microsoft\Edge\Application\msedge.exe", "edge"),
             # Linux
-            ("/usr/bin/google-chrome", ChromeType.GOOGLE),
-            ("/usr/bin/google-chrome-stable", ChromeType.GOOGLE),
-            ("/usr/bin/brave-browser", ChromeType.BRAVE),
-            ("/usr/bin/brave-browser-stable", ChromeType.BRAVE),
-            ("/usr/bin/chromium-browser", ChromeType.GOOGLE),
-            ("/usr/bin/chromium", ChromeType.GOOGLE),
-            ("/usr/bin/microsoft-edge", ChromeType.MSEDGE),
-            ("/usr/bin/microsoft-edge-stable", ChromeType.MSEDGE),
+            ("/usr/bin/google-chrome", "chrome"),
+            ("/usr/bin/google-chrome-stable", "chrome"),
+            ("/usr/bin/brave-browser", "brave"),
+            ("/usr/bin/brave-browser-stable", "brave"),
+            ("/usr/bin/chromium-browser", "chrome"),
+            ("/usr/bin/chromium", "chrome"),
+            ("/usr/bin/microsoft-edge", "edge"),
+            ("/usr/bin/microsoft-edge-stable", "edge"),
             # macOS
-            ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", ChromeType.GOOGLE),
-            ("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", ChromeType.BRAVE),
-            ("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", ChromeType.MSEDGE),
+            ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "chrome"),
+            ("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser", "brave"),
+            ("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge", "edge"),
         ]
-        for path, chrome_type in candidates:
+        for path, family in candidates:
             if os.path.exists(path):
-                return path, chrome_type
+                return path, family
         return None, None
 
     def _dump_chromedriver_log(self, log_path):
@@ -394,25 +398,37 @@ class BannerRegister:
         chromedriver_log_path = os.path.join(os.path.expanduser("~"), ".kfupm_sniper", "chromedriver.log")
         try:
             if self.browser == "Chrome":
-                options = webdriver.ChromeOptions()
-                options.add_argument("--headless")
-                options.add_argument("--disable-gpu")
-                options.add_argument("--window-size=1920,1080")
-                options.add_argument("--no-sandbox")
-                options.add_argument("--disable-dev-shm-usage")
-                binary, chrome_type = self._find_chromium_binary()
-                if binary:
-                    options.binary_location = binary
-                    self.log(f"[*] Using browser: {binary}")
-                else:
+                binary, family = self._find_chromium_binary()
+                if not binary:
                     self.log("No Chrome/Brave/Edge browser found. Install one or switch to Firefox.")
                     return False
-                service = ChromeService(
-                    ChromeDriverManager(chrome_type=chrome_type).install(),
-                    service_args=['--verbose'],
-                    log_output=chromedriver_log_path
-                )
-                self.driver = webdriver.Chrome(service=service, options=options)
+
+                self.log(f"[*] Using browser: {binary} (family: {family})")
+
+                if family == "edge":
+                    options = webdriver.EdgeOptions()
+                    options.add_argument("--headless")
+                    options.add_argument("--disable-gpu")
+                    options.add_argument("--window-size=1920,1080")
+                    options.add_argument("--no-sandbox")
+                    options.add_argument("--disable-dev-shm-usage")
+                    service = EdgeService(EdgeChromiumDriverManager().install(), service_args=['--verbose'], log_output=chromedriver_log_path)
+                    self.driver = webdriver.Edge(service=service, options=options)
+                else:
+                    chrome_type = ChromeType.BRAVE if family == "brave" else ChromeType.GOOGLE
+                    options = webdriver.ChromeOptions()
+                    options.add_argument("--headless")
+                    options.add_argument("--disable-gpu")
+                    options.add_argument("--window-size=1920,1080")
+                    options.add_argument("--no-sandbox")
+                    options.add_argument("--disable-dev-shm-usage")
+                    options.binary_location = binary
+                    service = ChromeService(
+                        ChromeDriverManager(chrome_type=chrome_type).install(),
+                        service_args=['--verbose'],
+                        log_output=chromedriver_log_path
+                    )
+                    self.driver = webdriver.Chrome(service=service, options=options)
             else:
                 options = webdriver.FirefoxOptions()
                 options.add_argument("-headless")
