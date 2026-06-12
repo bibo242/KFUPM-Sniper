@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch: # Allows manual run
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,11 +17,11 @@ jobs:
           - os: windows-latest
             upload_path: dist/KFUPM-Sniper.exe
             asset_name: KFUPM-Sniper-Windows.exe
-            
+
           - os: ubuntu-latest
             upload_path: dist/KFUPM-Sniper
             asset_name: KFUPM-Sniper-Linux
-            
+
           - os: macos-15-intel
             upload_path: dist/KFUPM-Sniper-MacOS.zip
             asset_name: KFUPM-Sniper-MacOS.zip
@@ -42,30 +42,64 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Prepare icons
+      shell: bash
+      run: |
+        python -c "
+        from PIL import Image
+        import requests, io, os
+        if not os.path.exists('icon.ico') or not os.path.exists('icon.png'):
+            try:
+                r = requests.get('https://github.com/user-attachments/assets/ecab7613-095c-4fb7-a274-0e0ce5255ef5', timeout=10)
+                if r.status_code == 200:
+                    img = Image.open(io.BytesIO(r.content)).convert('RGBA')
+                    if not os.path.exists('icon.ico'):
+                        img.save('icon.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(32,32),(16,16)])
+                    if not os.path.exists('icon.png'):
+                        img.save('icon.png', format='PNG')
+                    print('Icons created successfully')
+                else:
+                    print(f'Download returned status {r.status_code}, skipping')
+            except Exception as e:
+                print(f'Icon preparation skipped: {e}')
+        else:
+            print('Icons already present')
+        "
+
     - name: Build with PyInstaller
       env:
         MACOSX_DEPLOYMENT_TARGET: '10.15'
+      shell: bash
       run: |
-        # --windowed is crucial for Mac
-        pyinstaller --onefile --noconsole --windowed --name "KFUPM-Sniper" KFUPM_Sniper.py --hidden-import='PIL._tkinter_finder'
+        # Platform-specific separator for --add-data (Windows uses ;, Linux/Mac use :)
+        SEP=":"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          SEP=";"
+        fi
 
-    # ZIP STEP (Mac Only)
+        # Base command with all required hidden imports and data collection
+        pyinstaller --onefile --noconsole --windowed --name "KFUPM-Sniper" KFUPM_Sniper.py \
+          --hidden-import='PIL._tkinter_finder' \
+          --hidden-import='keyring.backends' \
+          --hidden-import='keyring.backends.chainer' \
+          --hidden-import='qrcode.image.pil' \
+          --collect-all webdriver_manager \
+          --collect-all selenium \
+          --add-data "icon.ico${SEP}." \
+          --add-data "icon.png${SEP}."
+
     - name: Zip Mac Application
       if: matrix.os == 'macos-15-intel'
       run: |
         cd dist
         zip -r KFUPM-Sniper-MacOS.zip KFUPM-Sniper.app
 
-    # --- FIX STARTS HERE ---
-    
-    # 1. Upload to Actions Tab (So you can see them when running manually)
     - name: Upload Artifact to Summary
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.asset_name }}
         path: ${{ matrix.upload_path }}
 
-    # 2. Upload to Releases Page (Only runs if you push a Tag like v1.0)
     - name: Release to GitHub
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')

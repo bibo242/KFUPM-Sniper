@@ -17,6 +17,7 @@ import keyring
 from datetime import datetime
 from tkinter import messagebox
 import tkinter.font as tkFont
+import tkinter as tk
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -30,7 +31,8 @@ from webdriver_manager.firefox import GeckoDriverManager
 from concurrent.futures import ThreadPoolExecutor
 
 # ================= CONFIGURATION =================
-ICON_FILENAME = "icon.ico"  # Window Title/Taskbar Icon
+ICON_ICO = "icon.ico"       # Windows taskbar/titlebar icon (.ico)
+ICON_PNG = "icon.png"       # Linux/macOS icon (.png)
 DEBUG_MODE = False         # Set to True to enable verbose debug logging to terminal
 VERSION = "2.5.0"           # Current app version — bump this + version.txt on every release
 YOUTUBE_GUIDE_URL = "https://www.youtube.com/watch?v=6L_nF6Kc2Uw"  # Replace with your actual video link
@@ -513,12 +515,16 @@ class SniperApp(ctk.CTk):
         self.resizable(True, True)
         # --- SET WINDOW ICON ---
         try:
-            # Requires .ico file for Windows taskbar/titlebar
-            icon_path = resource_path(ICON_FILENAME)
-            if os.path.exists(icon_path):
-                self.iconbitmap(icon_path)
+            # iconphoto() works cross-platform (Linux, macOS, Windows)
+            ico_path = resource_path(ICON_ICO)
+            png_path = resource_path(ICON_PNG)
+            if os.path.exists(png_path):
+                self._icon_image = tk.PhotoImage(file=png_path)
+                self.iconphoto(True, self._icon_image)
+            elif os.path.exists(ico_path):
+                self.iconbitmap(ico_path)
         except Exception:
-            pass # Fail silently if icon is missing or not Windows
+            pass
 
         self.backend = KFUPMSniperBackend()
         self.backend.log_callback = self.log_msg_threadsafe
