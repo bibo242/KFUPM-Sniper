@@ -378,13 +378,15 @@ class BannerRegister:
 
     def setup_driver(self):
         try:
-            if self.browser in ("Chrome", "Brave"):
+            if self.browser == "Chrome":
                 options = webdriver.ChromeOptions()
-                options.add_argument("--headless=new")
+                options.add_argument("--headless")
                 options.add_argument("--disable-gpu")
                 options.add_argument("--window-size=1920,1080")
                 options.add_argument("--no-sandbox")
                 options.add_argument("--disable-dev-shm-usage")
+                options.add_argument("--enable-logging")
+                options.add_argument("--v=1")
                 binary, chrome_type = self._find_chromium_binary()
                 if binary:
                     options.binary_location = binary
@@ -799,7 +801,7 @@ class SniperApp(ctk.CTk):
         self.reg_browser_var = ctk.StringVar(value=self.backend.reg_browser)
         self.reg_browser_selector = ctk.CTkSegmentedButton(
             self.reg_settings_container,
-            values=["Chrome", "Brave", "Firefox"],
+            values=["Chrome", "Firefox"],
             variable=self.reg_browser_var,
             command=self.snapshot_and_save,
             height=28,
