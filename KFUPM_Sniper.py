@@ -395,9 +395,11 @@ class BannerRegister:
             self.log(f"[ChromeDriver Log]: Failed to read log: {e}")
 
     def setup_driver(self):
-        chromedriver_log_path = os.path.join(os.path.expanduser("~"), ".kfupm_sniper", "chromedriver.log")
+        log_dir = os.path.join(os.path.expanduser("~"), ".kfupm_sniper")
+        os.makedirs(log_dir, exist_ok=True)
         try:
             if self.browser == "Chrome":
+                chromedriver_log_path = os.path.join(log_dir, "chromedriver.log")
                 binary, family = self._find_chromium_binary()
                 if not binary:
                     self.log("No Chrome/Brave/Edge browser found. Install one or switch to Firefox.")
@@ -430,30 +432,55 @@ class BannerRegister:
                     )
                     self.driver = webdriver.Chrome(service=service, options=options)
             else:
+                if platform.system() == "Linux" and 'DISPLAY' not in os.environ:
+                    os.environ['DISPLAY'] = ':0'
+                geckodriver_log_path = os.path.join(log_dir, "geckodriver.log")
                 options = webdriver.FirefoxOptions()
                 options.add_argument("-headless")
-                service = FirefoxService(GeckoDriverManager().install())
+                service = FirefoxService(GeckoDriverManager().install(), log_output=geckodriver_log_path)
                 self.driver = webdriver.Firefox(service=service, options=options)
             return True
         except Exception as e:
-            self.log(f"Driver Setup Error: {e}")
-            self._dump_chromedriver_log(chromedriver_log_path)
+            if self.browser == "Chrome":
+                chromedriver_log_path = os.path.join(log_dir, "chromedriver.log")
+                self.log(f"Driver Setup Error: {e}")
+                self._dump_chromedriver_log(chromedriver_log_path)
+            else:
+                geckodriver_log_path = os.path.join(log_dir, "geckodriver.log")
+                self.log(f"Driver Setup Error: {e}")
+                if os.path.exists(geckodriver_log_path):
+                    try:
+                        with open(geckodriver_log_path, 'r', encoding='utf-8', errors='replace') as f:
+                            for line in f.readlines()[-20:]:
+                                self.log(f"[GeckoDriver] {line.rstrip()}")
+                    except Exception:
+                        pass
             return False
 
     def run(self, target_crn, term):
         self.log(f"[*] Starting Auto-Registration for {target_crn}...")
         if not self.setup_driver(): return
-        
-        try:
-            if self.full_login_flow(term):
-                self.extract_tokens()
-                self.execute_mirror_logic(target_crn, term)
-        except Exception as e:
-            self.log(f"[!] Registration Error: {e}")
-        finally:
-            if self.driver:
-                time.sleep(5)
-                self.driver.quit()
+
+        max_login_attempts = 3
+        for attempt in range(1, max_login_attempts + 1):
+            try:
+                if self.full_login_flow(term):
+                    self.extract_tokens()
+                    self.execute_mirror_logic(target_crn, term)
+                    break
+                elif attempt < max_login_attempts:
+                    self.log(f"[!] Login attempt {attempt}/{max_login_attempts} failed. Retrying in 5s...")
+                    time.sleep(5)
+                    self.driver.get(f"{self.base_url}/classRegistration/classRegistration")
+                    time.sleep(3)
+                else:
+                    self.log(f"[!] All {max_login_attempts} login attempts failed.")
+            except Exception as e:
+                self.log(f"[!] Registration Error: {e}")
+                break
+        if self.driver:
+            time.sleep(5)
+            self.driver.quit()
 
     def full_login_flow(self, term):
         self.log("[*] Step 1: Logging in via Selenium...")
@@ -465,9 +492,10 @@ class BannerRegister:
             pwd.send_keys(self.password + Keys.RETURN)
             try: WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.ID, "idSIButton9"))).click()
             except: pass
-            
+
             self.log("[*] Dashboard loaded. Navigating to Add/Drop...")
-            WebDriverWait(self.driver, 20).until(EC.element_to_be_clickable((By.ID, "registerLink"))).click()
+            time.sleep(3)
+            WebDriverWait(self.driver, 30).until(EC.element_to_be_clickable((By.ID, "registerLink"))).click()
             WebDriverWait(self.driver, 20).until(EC.element_to_be_clickable((By.ID, "s2id_txt_term"))).click()
             search = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#select2-drop input.select2-input")))
             search.send_keys(term)
