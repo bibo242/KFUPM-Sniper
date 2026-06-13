@@ -37,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 ICON_ICO = "icon.ico"       # Windows taskbar/titlebar icon (.ico)
 ICON_PNG = "icon.png"       # Linux/macOS icon (.png)
 DEBUG_MODE = False         # Set to True to enable verbose debug logging to terminal
-VERSION = "2.5.1"           # Current app version — bump this + version.txt on every release
+VERSION = "2.5.0"           # Current app version — bump this + version.txt on every release
 YOUTUBE_GUIDE_URL = "https://www.youtube.com/watch?v=6L_nF6Kc2Uw"  # Replace with your actual video link
 
 # ================= OS DETECTION & SOUND =================
