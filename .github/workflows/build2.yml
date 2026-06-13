@@ -77,16 +77,28 @@ jobs:
           SEP=";"
         fi
 
-        # Base command with all required hidden imports and data collection
-        pyinstaller --onefile --noconsole --windowed --name "KFUPM-Sniper" KFUPM_Sniper.py \
-          --hidden-import='PIL._tkinter_finder' \
-          --hidden-import='keyring.backends' \
-          --hidden-import='keyring.backends.chainer' \
-          --hidden-import='qrcode.image.pil' \
-          --collect-all webdriver_manager \
-          --collect-all selenium \
-          --add-data "icon.ico${SEP}." \
-          --add-data "icon.png${SEP}."
+        # Linux: --onefile only (no --noconsole --windowed — those flags break Firefox subprocess on Linux)
+        # Windows/macOS: --noconsole --windowed for proper GUI app behavior
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          pyinstaller --onefile --name "KFUPM-Sniper" KFUPM_Sniper.py \
+            --hidden-import='PIL._tkinter_finder' \
+            --hidden-import='keyring.backends' \
+            --hidden-import='keyring.backends.chainer' \
+            --hidden-import='qrcode.image.pil' \
+            --collect-all webdriver_manager \
+            --collect-all selenium \
+            --add-data "icon.png:."
+        else
+          pyinstaller --onefile --noconsole --windowed --name "KFUPM-Sniper" KFUPM_Sniper.py \
+            --hidden-import='PIL._tkinter_finder' \
+            --hidden-import='keyring.backends' \
+            --hidden-import='keyring.backends.chainer' \
+            --hidden-import='qrcode.image.pil' \
+            --collect-all webdriver_manager \
+            --collect-all selenium \
+            --add-data "icon.ico${SEP}." \
+            --add-data "icon.png${SEP}."
+        fi
 
     - name: Zip Mac Application
       if: matrix.os == 'macos-15-intel'

@@ -397,6 +397,17 @@ class BannerRegister:
     def setup_driver(self):
         log_dir = os.path.join(os.path.expanduser("~"), ".kfupm_sniper")
         os.makedirs(log_dir, exist_ok=True)
+
+        if getattr(sys, 'frozen', False):
+            ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+            meipass = sys._MEIPASS
+            if ld_path.startswith(meipass):
+                orig = os.environ.get('LD_LIBRARY_PATH_ORIG', '')
+                if orig:
+                    os.environ['LD_LIBRARY_PATH'] = orig
+                else:
+                    os.environ.pop('LD_LIBRARY_PATH', None)
+
         try:
             if self.browser == "Chrome":
                 chromedriver_log_path = os.path.join(log_dir, "chromedriver.log")
@@ -405,7 +416,7 @@ class BannerRegister:
                     self.log("No Chrome/Brave/Edge browser found. Install one or switch to Firefox.")
                     return False
 
-                self.log(f"[*] Using browser: {binary} (family: {family})")
+                self.log(f"[*] Browser: {binary} (family: {family})")
 
                 if family == "edge":
                     options = webdriver.EdgeOptions()
@@ -414,7 +425,7 @@ class BannerRegister:
                     options.add_argument("--window-size=1920,1080")
                     options.add_argument("--no-sandbox")
                     options.add_argument("--disable-dev-shm-usage")
-                    service = EdgeService(EdgeChromiumDriverManager().install(), service_args=['--verbose'], log_output=chromedriver_log_path)
+                    service = EdgeService(EdgeChromiumDriverManager().install(), log_output=chromedriver_log_path)
                     self.driver = webdriver.Edge(service=service, options=options)
                 else:
                     chrome_type = ChromeType.BRAVE if family == "brave" else ChromeType.GOOGLE
@@ -427,11 +438,11 @@ class BannerRegister:
                     options.binary_location = binary
                     service = ChromeService(
                         ChromeDriverManager(chrome_type=chrome_type).install(),
-                        service_args=['--verbose'],
                         log_output=chromedriver_log_path
                     )
                     self.driver = webdriver.Chrome(service=service, options=options)
             else:
+                self.log("[*] Browser: Firefox")
                 if platform.system() == "Linux" and 'DISPLAY' not in os.environ:
                     os.environ['DISPLAY'] = ':0'
                 geckodriver_log_path = os.path.join(log_dir, "geckodriver.log")
